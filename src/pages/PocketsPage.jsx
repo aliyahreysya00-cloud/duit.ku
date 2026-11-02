@@ -8,19 +8,19 @@ import Mascot from '../components/Mascot'
 import { formatRupiah, isWfhDay, getWeekDates } from '../lib/utils'
 
 export default function PocketsPage() {
-  const { pockets, updatePocketBalance, transferBetweenPockets, getPocketByName } = usePockets()
+  const { updatePocketBalance, transferBetweenPockets, getPocketByName } = usePockets()
   const { transactions } = useTransactions()
   const { profile } = useProfile()
   const { wishlist } = useWishlist()
   const toast = useToast()
 
-  const [editingPocket, setEditingPocket] = useState(null)
-  const [editAmount, setEditAmount] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const [editP, setEditP]   = useState(null)
+  const [editAmt, setEditAmt] = useState('')
+  const [busy, setBusy]     = useState(false)
   const [showTransfer, setShowTransfer] = useState(false)
-  const [transfer, setTransfer] = useState({ from: 'jajan', to: 'tabungan', amount: '' })
-  const [showPrevSaving, setShowPrevSaving] = useState(false)
-  const [prevSaving, setPrevSaving] = useState({ tabungan: '', wishlist: '' })
+  const [tr, setTr]         = useState({ from:'jajan', to:'tabungan', amount:'' })
+  const [showPrev, setShowPrev] = useState(false)
+  const [prev, setPrev]     = useState({ tabungan:'', wishlist:'' })
 
   const today    = new Date()
   const todayStr = today.toISOString().split('T')[0]
@@ -28,37 +28,37 @@ export default function PocketsPage() {
   const weekStart = weekDates[0].toISOString().split('T')[0]
   const weekEnd   = weekDates[6].toISOString().split('T')[0]
 
-  const jajanPocket    = getPocketByName('jajan')
-  const tabunganPocket = getPocketByName('tabungan')
-  const wishlistPocket = getPocketByName('wishlist')
+  const jp = getPocketByName('jajan')
+  const tp = getPocketByName('tabungan')
+  const wp = getPocketByName('wishlist')
 
-  // ── Kebutuhan rutin minggu ini ─────────────────────────────
-  const weeklyNeeds = useMemo(() => {
-    if (!profile) return { transport: 0, makan: 0, total: 0, days: [] }
-    const { transport_amount=14000, lunch_amount=15000, dinner_amount=20000, wfh_days=[3] } = profile
-    const days = weekDates.filter((d) => d.getDay() >= 1 && d.getDay() <= 5)
-    const detail = days.map((d) => {
-      const dStr  = d.toISOString().split('T')[0]
-      const isWfh = isWfhDay(d, wfh_days)
-      const trans = isWfh ? 0 : transport_amount
-      const makan = lunch_amount + dinner_amount
+  // Kebutuhan rutin minggu ini
+  const needs = useMemo(() => {
+    if (!profile) return { transport:0, makan:0, total:0, days:[] }
+    const { transport_amount:ta=14000, lunch_amount:la=15000, dinner_amount:da=20000, wfh_days:wfhd=[3] } = profile
+    const workDays = weekDates.filter((d)=>d.getDay()>=1&&d.getDay()<=5)
+    const days = workDays.map((d) => {
+      const ds  = d.toISOString().split('T')[0]
+      const wfh = isWfhDay(d, wfhd)
+      const tr  = wfh ? 0 : ta
+      const mk  = la + da
       return {
         label: ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][d.getDay()],
-        dateStr: dStr, transport: trans, makan, total: trans + makan,
-        isWfh, isPast: dStr < todayStr, isToday: dStr === todayStr,
+        dateStr:ds, transport:tr, makan:mk, total:tr+mk,
+        isWfh:wfh, isPast:ds<todayStr, isToday:ds===todayStr,
       }
     })
     return {
-      transport: detail.reduce((s,d)=>s+d.transport,0),
-      makan:     detail.reduce((s,d)=>s+d.makan,0),
-      total:     detail.reduce((s,d)=>s+d.total,0),
-      days: detail,
+      transport: days.reduce((s,d)=>s+d.transport,0),
+      makan:     days.reduce((s,d)=>s+d.makan,0),
+      total:     days.reduce((s,d)=>s+d.total,0),
+      days,
     }
   }, [profile, weekDates, todayStr])
 
-  // ── Aktual pengeluaran minggu ini ──────────────────────────
-  const weekActual = useMemo(() => {
-    const exp = transactions.filter((t) => t.type==='expense' && t.date>=weekStart && t.date<=weekEnd)
+  // Aktual minggu ini
+  const actual = useMemo(() => {
+    const exp = transactions.filter((t)=>t.type==='expense'&&t.date>=weekStart&&t.date<=weekEnd)
     return {
       total:     exp.reduce((s,t)=>s+t.amount,0),
       transport: exp.filter((t)=>t.category==='transport').reduce((s,t)=>s+t.amount,0),
@@ -67,124 +67,109 @@ export default function PocketsPage() {
     }
   }, [transactions, weekStart, weekEnd])
 
-  // ── Kalkulasi utama ────────────────────────────────────────
-  const jajanBalance = jajanPocket?.balance || 0
+  // Kalkulator
+  const jajanBal     = jp?.balance || 0
   const savingPct    = profile?.saving_percent || 20
+  const sisaKebutuhan = Math.max(0, needs.total - actual.total)
+  const tersedia      = Math.max(0, jajanBal - sisaKebutuhan)
+  const estNabung     = Math.round(tersedia * savingPct / 100)
+  const uangBebas     = Math.max(0, tersedia - estNabung)
 
-  // Sisa kebutuhan yang belum dikeluarkan minggu ini
-  const sisaKebutuhan = Math.max(0, weeklyNeeds.total - weekActual.total)
+  const mood = actual.jajan > uangBebas * 1.2 ? 'sad'
+             : estNabung > 0 ? 'happy' : 'neutral'
 
-  // Uang yang bisa dialokasikan (setelah dikurangi sisa kebutuhan)
-  const tersedia = Math.max(0, jajanBalance - sisaKebutuhan)
+  // Wishlist
+  const activeWL = wishlist.filter((w)=>!w.is_completed).sort((a,b)=>a.priority-b.priority)
+  const totalKurang = activeWL.reduce((s,w)=>s+Math.max(0,w.price-w.saved_amount),0)
 
-  // Estimasi nabung dari jajan (pay yourself first)
-  const estNabung = Math.round(tersedia * savingPct / 100)
-
-  // Uang bebas (main/jajan) = tersedia - estimasi nabung
-  const uangBebas = Math.max(0, tersedia - estNabung)
-
-  // Mood maskot
-  const mood = weekActual.jajan > estNabung * 2 ? 'sad'
-             : estNabung > 0                    ? 'happy'
-             : 'neutral'
-
-  // ── Wishlist summary ───────────────────────────────────────
-  const activeWishlist = wishlist.filter((w) => !w.is_completed).sort((a,b)=>a.priority-b.priority)
-  const totalWishlistNeeded = activeWishlist.reduce((s,w) => s + Math.max(0, w.price - w.saved_amount), 0)
-  const wishlistBalance = wishlistPocket?.balance || 0
-
-  // ── Handlers ──────────────────────────────────────────────
-  async function handleEditSave(pocket) {
-    const val = parseInt(editAmount)
-    if (isNaN(val) || val < 0) return
-    setSubmitting(true)
-    const { error } = await updatePocketBalance(pocket.id, val)
-    setSubmitting(false)
-    if (error) { toast('Gagal update 😢', 'error'); return }
-    toast('Saldo diperbarui ✅', 'success')
-    setEditingPocket(null); setEditAmount('')
+  // Handlers
+  async function saveEditPocket(p) {
+    const v = parseInt(editAmt)
+    if (isNaN(v) || v < 0) return
+    setBusy(true)
+    const { error } = await updatePocketBalance(p.id, v)
+    setBusy(false)
+    if (error) { toast('Gagal update 😢','error'); return }
+    toast('Saldo diperbarui ✅','success')
+    setEditP(null); setEditAmt('')
   }
 
-  async function handleTransferSubmit(e) {
+  async function submitTransfer(e) {
     e.preventDefault()
-    const amount = parseInt(transfer.amount)
-    if (!amount || transfer.from === transfer.to) return
-    const pMap = { jajan: jajanPocket, tabungan: tabunganPocket, wishlist: wishlistPocket }
-    const fromP = pMap[transfer.from], toP = pMap[transfer.to]
-    if (!fromP || !toP) return
-    setSubmitting(true)
-    const { error } = await transferBetweenPockets(fromP.id, toP.id, amount)
-    setSubmitting(false)
-    if (error) { toast(error, 'error'); return }
-    toast(`${formatRupiah(amount)} dipindah ✅`, 'success')
-    setTransfer((t) => ({ ...t, amount: '' }))
-    setShowTransfer(false)
+    const amt = parseInt(tr.amount)
+    if (!amt || tr.from===tr.to) return
+    const pm = { jajan:jp, tabungan:tp, wishlist:wp }
+    const fp = pm[tr.from], top = pm[tr.to]
+    if (!fp||!top) return
+    setBusy(true)
+    const { error } = await transferBetweenPockets(fp.id, top.id, amt)
+    setBusy(false)
+    if (error) { toast(error,'error'); return }
+    toast(`${formatRupiah(amt)} dipindah ✅`,'success')
+    setTr(t=>({...t,amount:''})); setShowTransfer(false)
   }
 
-  async function handleSisihkanNabung() {
-    if (!jajanPocket || !tabunganPocket || estNabung <= 0) return
-    setSubmitting(true)
-    const { error } = await transferBetweenPockets(jajanPocket.id, tabunganPocket.id, estNabung)
-    setSubmitting(false)
-    if (error) { toast(error, 'error'); return }
-    toast(`${formatRupiah(estNabung)} disisihkan ke Tabungan 🐷`, 'success')
+  async function sisihkanNabung() {
+    if (!jp||!tp||estNabung<=0) return
+    setBusy(true)
+    const { error } = await transferBetweenPockets(jp.id, tp.id, estNabung)
+    setBusy(false)
+    if (error) { toast(error,'error'); return }
+    toast(`${formatRupiah(estNabung)} disisihkan ke Tabungan 🐷`,'success')
   }
 
-  async function handleSavePrevSaving() {
-    const tab  = parseInt(prevSaving.tabungan) || 0
-    const wish = parseInt(prevSaving.wishlist)  || 0
-    if (tab === 0 && wish === 0) return
-    setSubmitting(true)
-    if (tab  > 0 && tabunganPocket) await updatePocketBalance(tabunganPocket.id, tabunganPocket.balance + tab)
-    if (wish > 0 && wishlistPocket) await updatePocketBalance(wishlistPocket.id, wishlistPocket.balance + wish)
-    setSubmitting(false)
-    toast('Tabungan minggu lalu tersimpan ✅', 'success')
-    setShowPrevSaving(false)
-    setPrevSaving({ tabungan: '', wishlist: '' })
+  async function savePrev() {
+    const tabAmt  = parseInt(prev.tabungan) || 0
+    const wishAmt = parseInt(prev.wishlist)  || 0
+    if (!tabAmt && !wishAmt) return
+    setBusy(true)
+    if (tabAmt  && tp) await updatePocketBalance(tp.id, tp.balance + tabAmt)
+    if (wishAmt && wp) await updatePocketBalance(wp.id, wp.balance + wishAmt)
+    setBusy(false)
+    toast('Tabungan lama tersimpan ✅','success')
+    setShowPrev(false); setPrev({tabungan:'',wishlist:''})
   }
 
-  const pocketMeta = [
-    { key:'jajan',    icon:'🍜', label:'Uang Jajan',       color:'peach',    pocket: jajanPocket },
-    { key:'tabungan', icon:'🏦', label:'Tabungan',          color:'mint',     pocket: tabunganPocket },
-    { key:'wishlist', icon:'✨', label:'Tabungan Wishlist', color:'lavender', pocket: wishlistPocket },
+  const PM = [
+    { key:'jajan',    icon:'🍜', label:'Uang Jajan',       c:'peach',    p:jp },
+    { key:'tabungan', icon:'🏦', label:'Tabungan',          c:'mint',     p:tp },
+    { key:'wishlist', icon:'✨', label:'Tabungan Wishlist', c:'lavender', p:wp },
   ]
 
-  const pocketOptions = [
-    { value:'jajan',    label:'🍜 Uang Jajan' },
-    { value:'tabungan', label:'🏦 Tabungan' },
-    { value:'wishlist', label:'✨ Wishlist' },
+  const PO = [
+    {value:'jajan',label:'🍜 Uang Jajan'},
+    {value:'tabungan',label:'🏦 Tabungan'},
+    {value:'wishlist',label:'✨ Wishlist'},
   ]
 
   return (
     <div className="page">
-      <header className="page__header">
+      <div className="page__header">
         <h1 className="page__title">Nabung 🐷</h1>
-      </header>
+      </div>
 
-      <main className="page__content">
+      <div className="page__content">
 
         {/* ── Pos Uang ── */}
-        <div className="pocket-row">
-          {pocketMeta.map(({ icon, label, color, pocket, key }) => (
-            <div key={key} className={`pocket-card-sm pocket-card-sm--${color}`}>
+        <div className="pocket-cards-row">
+          {PM.map(({key,icon,label,c,p})=>(
+            <div key={key} className={`pocket-card-sm pocket-card-sm--${c}`}>
               <span className="pocket-card-sm__icon">{icon}</span>
               <span className="pocket-card-sm__label">{label}</span>
-              {editingPocket === pocket?.id ? (
+              {editP===p?.id ? (
                 <div className="pocket-edit-inline">
-                  <input type="number" className="form-input form-input--sm" value={editAmount}
-                    onChange={(e) => setEditAmount(e.target.value)} placeholder="Saldo" inputMode="numeric" autoFocus />
-                  <div style={{ display:'flex', gap:'4px', marginTop:'4px' }}>
-                    <button className="btn btn--primary btn--xs" disabled={submitting} onClick={() => handleEditSave(pocket)}>✓</button>
-                    <button className="btn btn--ghost btn--xs" onClick={() => { setEditingPocket(null); setEditAmount('') }}>✕</button>
+                  <input type="number" className="form-input form-input--sm" value={editAmt}
+                    onChange={(e)=>setEditAmt(e.target.value)} placeholder="Saldo" inputMode="numeric" autoFocus />
+                  <div style={{display:'flex',gap:'4px',marginTop:'4px'}}>
+                    <button className="btn btn--primary btn--xs" disabled={busy} onClick={()=>saveEditPocket(p)}>✓</button>
+                    <button className="btn btn--ghost btn--xs" onClick={()=>{setEditP(null);setEditAmt('')}}>✕</button>
                   </div>
                 </div>
               ) : (
                 <>
-                  <span className="pocket-card-sm__amount">{formatRupiah(pocket?.balance || 0)}</span>
+                  <span className="pocket-card-sm__amount">{formatRupiah(p?.balance||0)}</span>
                   <button className="pocket-card-sm__edit"
-                    onClick={() => { setEditingPocket(pocket?.id); setEditAmount(String(pocket?.balance || 0)) }}>
-                    ✏️ edit
-                  </button>
+                    onClick={()=>{setEditP(p?.id);setEditAmt(String(p?.balance||0))}}>✏️ edit</button>
                 </>
               )}
             </div>
@@ -192,83 +177,80 @@ export default function PocketsPage() {
         </div>
 
         {/* ── Input Tabungan Minggu Lalu ── */}
-        <div className="card card--hint">
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div className="card card--yellow">
+          <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between'}}>
             <div>
-              <p className="card-hint__title">📦 Ada tabungan minggu lalu?</p>
+              <p className="card-hint__title">📦 Ada tabungan dari minggu lalu?</p>
               <p className="card-hint__sub">Masukkan saldo awal sebelum mulai minggu ini</p>
             </div>
-            <button className="btn btn--ghost btn--sm" onClick={() => setShowPrevSaving(!showPrevSaving)}>
-              {showPrevSaving ? 'Tutup' : 'Isi'}
+            <button className="btn btn--ghost btn--sm" onClick={()=>setShowPrev(!showPrev)}>
+              {showPrev?'Tutup':'Isi'}
             </button>
           </div>
-          {showPrevSaving && (
-            <div className="prev-saving-form">
-              <div className="form-row" style={{ marginTop:'10px' }}>
+          {showPrev && (
+            <div style={{marginTop:'12px'}}>
+              <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">🏦 Tambah ke Tabungan</label>
+                  <label className="form-label">Tambah ke Tabungan</label>
                   <input type="number" className="form-input" placeholder="0" inputMode="numeric"
-                    value={prevSaving.tabungan} onChange={(e) => setPrevSaving((p)=>({...p, tabungan: e.target.value}))} />
+                    value={prev.tabungan} onChange={(e)=>setPrev(p=>({...p,tabungan:e.target.value}))} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">✨ Tambah ke Tabungan Wishlist</label>
+                  <label className="form-label">Tambah ke Tab. Wishlist</label>
                   <input type="number" className="form-input" placeholder="0" inputMode="numeric"
-                    value={prevSaving.wishlist} onChange={(e) => setPrevSaving((p)=>({...p, wishlist: e.target.value}))} />
+                    value={prev.wishlist} onChange={(e)=>setPrev(p=>({...p,wishlist:e.target.value}))} />
                 </div>
               </div>
-              <button className="btn btn--primary btn--full" disabled={submitting} onClick={handleSavePrevSaving}>
-                {submitting ? 'Menyimpan...' : '💾 Simpan Tabungan Lama'}
+              <button className="btn btn--primary btn--full" disabled={busy} onClick={savePrev}>
+                {busy?'Menyimpan...':'💾 Simpan'}
               </button>
             </div>
           )}
         </div>
 
-        {/* ── Kalkulator Uang Minggu Ini ── */}
-        <section className="card money-calc">
-          <div style={{ display:'flex', alignItems:'center', gap:'12px', marginBottom:'12px' }}>
-            <Mascot mood={mood} size={48} />
+        {/* ── Kalkulator Uang ── */}
+        <div className="card money-calc">
+          <div className="money-calc__header">
+            <Mascot mood={mood} size={44} />
             <div>
-              <h2 className="money-calc__title">Uangmu Minggu Ini</h2>
-              <p className="money-calc__sub">Breakdown lengkap buat kamu 🔍</p>
+              <p className="money-calc__title">Uangmu minggu ini</p>
+              <p className="money-calc__sub">Breakdown buat bantu keputusanmu 🔍</p>
             </div>
           </div>
 
-          <div className="money-calc__rows">
-            <MoneyRow icon="💰" label="Saldo uang jajan" value={jajanBalance} />
-            <MoneyRow icon="🚌🍱" label={`Sisa kebutuhan rutin (${formatRupiah(weeklyNeeds.total, true)} total)`}
-              value={-sisaKebutuhan} sub={`Sudah keluar: ${formatRupiah(weekActual.total, true)}`} isNeg />
-            <div className="money-calc__divider" />
-            <MoneyRow icon="💡" label="Tersedia setelah kebutuhan" value={tersedia} highlight />
-            <MoneyRow icon="🐷" label={`Estimasi nabung (${savingPct}%)`} value={-estNabung} isNeg />
-            <div className="money-calc__divider" />
-            <MoneyRow icon="🎉" label="Uang bebas (main/jajan)" value={uangBebas} highlight big
-              warn={weekActual.jajan > uangBebas ? `Jajan sudah ${formatRupiah(weekActual.jajan, true)}, melebihi anggaran!` : null} />
+          <div className="money-calc__body">
+            <MRow icon="💰" label="Saldo uang jajan" val={jajanBal} />
+            <MRow icon="🚌🍱" label={`Sisa kebutuhan rutin`} val={-sisaKebutuhan} isNeg
+              sub={`Total rencana ${formatRupiah(needs.total,true)} · sudah keluar ${formatRupiah(actual.total,true)}`} />
+            <div className="money-calc__divider"/>
+            <MRow icon="✅" label="Tersedia setelah kebutuhan" val={tersedia} hl />
+            <MRow icon="🐷" label={`Estimasi nabung (${savingPct}%)`} val={-estNabung} isNeg />
+            <div className="money-calc__divider"/>
+            <MRow icon="🎉" label="Uang bebas (main/jajan)" val={uangBebas} free big
+              warn={actual.jajan>uangBebas?`Sudah jajan ${formatRupiah(actual.jajan,true)}, melebihi anggaran!`:null} />
           </div>
 
-          {/* Tombol sisihkan nabung */}
-          {estNabung > 0 && (
-            <button className="btn btn--primary btn--full" style={{ marginTop:'12px' }}
-              disabled={submitting || !jajanPocket || !tabunganPocket}
-              onClick={handleSisihkanNabung}>
-              🐷 Sisihkan {formatRupiah(estNabung)} ke Tabungan sekarang
+          {estNabung > 0 && jp && tp && (
+            <button className="btn btn--primary btn--full" style={{marginTop:'14px'}}
+              disabled={busy} onClick={sisihkanNabung}>
+              🐷 Sisihkan {formatRupiah(estNabung)} ke Tabungan
             </button>
           )}
-        </section>
+        </div>
 
         {/* ── Tracking Harian ── */}
-        <section className="card">
-          <h2 className="section__title" style={{ marginBottom:'10px' }}>Tracking Harian 📅</h2>
+        <div className="card">
+          <p className="section__title" style={{marginBottom:'10px'}}>Tracking Harian 📅</p>
           <div className="day-table">
             <div className="day-table__header">
               <span>Hari</span><span>Trans.</span><span>Makan</span><span>Total</span>
             </div>
-            {weeklyNeeds.days.map((d) => {
-              const dayTx       = transactions.filter((t)=>t.type==='expense' && t.date===d.dateStr)
-              const dayTransport = dayTx.filter((t)=>t.category==='transport').reduce((s,t)=>s+t.amount,0)
-              const dayMakan     = dayTx.filter((t)=>['makan_siang','makan_malam'].includes(t.category)).reduce((s,t)=>s+t.amount,0)
-              const dayTotal     = dayTx.reduce((s,t)=>s+t.amount,0)
-              const over         = d.isPast && dayTotal > d.total
-
+            {needs.days.map((d)=>{
+              const dt  = transactions.filter((t)=>t.type==='expense'&&t.date===d.dateStr)
+              const dtr = dt.filter((t)=>t.category==='transport').reduce((s,t)=>s+t.amount,0)
+              const dmk = dt.filter((t)=>['makan_siang','makan_malam'].includes(t.category)).reduce((s,t)=>s+t.amount,0)
+              const dtot= dt.reduce((s,t)=>s+t.amount,0)
+              const over= d.isPast&&dtot>d.total
               return (
                 <div key={d.dateStr}
                   className={`day-table__row ${d.isToday?'day-table__row--today':''} ${d.isPast?'day-table__row--past':''}`}>
@@ -277,142 +259,114 @@ export default function PocketsPage() {
                     {d.isWfh   && <span className="badge-sm badge-sm--wfh">WFH</span>}
                     {d.isToday && <span className="badge-sm badge-sm--today">hari ini</span>}
                   </span>
-                  <span className={dayTransport > d.transport && d.transport > 0 ? 'text-over' : ''}>
-                    {dayTransport > 0
-                      ? formatRupiah(dayTransport, true)
-                      : <span className="text-plan">{d.isWfh ? '-' : formatRupiah(d.transport, true)}</span>}
+                  <span className={dtr>d.transport&&d.transport>0?'text-over':''}>
+                    {dtr>0 ? formatRupiah(dtr,true) : <span className="text-plan">{d.isWfh?'-':formatRupiah(d.transport,true)}</span>}
                   </span>
-                  <span className={dayMakan > d.makan ? 'text-over' : ''}>
-                    {dayMakan > 0
-                      ? formatRupiah(dayMakan, true)
-                      : <span className="text-plan">{formatRupiah(d.makan, true)}</span>}
+                  <span className={dmk>d.makan?'text-over':''}>
+                    {dmk>0 ? formatRupiah(dmk,true) : <span className="text-plan">{formatRupiah(d.makan,true)}</span>}
                   </span>
-                  <span className={over ? 'text-over fw-bold' : 'fw-bold'}>
-                    {dayTotal > 0
-                      ? formatRupiah(dayTotal, true)
-                      : <span className="text-plan">{formatRupiah(d.total, true)}</span>}
+                  <span className={over?'text-over fw-bold':'fw-bold'}>
+                    {dtot>0 ? formatRupiah(dtot,true) : <span className="text-plan">{formatRupiah(d.total,true)}</span>}
                   </span>
                 </div>
               )
             })}
             <div className="day-table__row day-table__row--total">
               <span>Total</span>
-              <span>
-                {formatRupiah(weekActual.transport,true)}
-                <span className="text-plan"> /{formatRupiah(weeklyNeeds.transport,true)}</span>
-              </span>
-              <span>
-                {formatRupiah(weekActual.makan,true)}
-                <span className="text-plan"> /{formatRupiah(weeklyNeeds.makan,true)}</span>
-              </span>
-              <span className={weekActual.total > weeklyNeeds.total ? 'text-over fw-bold' : 'fw-bold'}>
-                {formatRupiah(weekActual.total,true)}
-                <span className="text-plan"> /{formatRupiah(weeklyNeeds.total,true)}</span>
+              <span>{formatRupiah(actual.transport,true)}<span className="text-plan"> /{formatRupiah(needs.transport,true)}</span></span>
+              <span>{formatRupiah(actual.makan,true)}<span className="text-plan"> /{formatRupiah(needs.makan,true)}</span></span>
+              <span className={actual.total>needs.total?'text-over fw-bold':'fw-bold'}>
+                {formatRupiah(actual.total,true)}<span className="text-plan"> /{formatRupiah(needs.total,true)}</span>
               </span>
             </div>
           </div>
-        </section>
+        </div>
 
         {/* ── Wishlist Progress ── */}
-        {activeWishlist.length > 0 && (
-          <section className="card">
-            <h2 className="section__title" style={{ marginBottom:'10px' }}>Progress Wishlist ✨</h2>
-            <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
-              {activeWishlist.map((item) => {
-                const kurang   = Math.max(0, item.price - item.saved_amount)
-                const pct      = Math.min((item.saved_amount / item.price) * 100, 100)
-                const weeksEst = estNabung > 0 && kurang > 0
-                  ? Math.ceil(kurang / estNabung) : null
-
-                return (
-                  <div key={item.id} className="wishlist-mini">
-                    <div className="wishlist-mini__row">
-                      <span className="wishlist-mini__name">
-                        <span className="wishlist-mini__pri">#{item.priority}</span> {item.name}
-                      </span>
-                      <span className="wishlist-mini__pct">{Math.round(pct)}%</span>
-                    </div>
-                    <div className="progress-bar">
-                      <div className="progress-bar__fill progress-bar__fill--wishlist" style={{ width:`${pct}%` }} />
-                    </div>
-                    <div className="wishlist-mini__info">
-                      <span>
-                        <span style={{ color:'var(--c-mint)', fontWeight:700 }}>{formatRupiah(item.saved_amount)}</span>
-                        {' / '}{formatRupiah(item.price)}
-                      </span>
-                      {kurang > 0 ? (
-                        <span className="wishlist-mini__kurang">
-                          Kurang <strong>{formatRupiah(kurang)}</strong>
-                          {weeksEst && <span className="text-plan"> · ~{weeksEst} minggu</span>}
-                        </span>
-                      ) : (
-                        <span style={{ color:'var(--c-mint)', fontWeight:700 }}>✅ Cukup!</span>
-                      )}
-                    </div>
+        {activeWL.length > 0 && (
+          <div className="card">
+            <p className="section__title" style={{marginBottom:'10px'}}>Progress Wishlist ✨</p>
+            {activeWL.map((item)=>{
+              const kurang   = Math.max(0, item.price-item.saved_amount)
+              const pct      = Math.min((item.saved_amount/item.price)*100,100)
+              const weeksEst = estNabung>0&&kurang>0 ? Math.ceil(kurang/estNabung) : null
+              return (
+                <div key={item.id} className="wishlist-mini">
+                  <div className="wishlist-mini__row">
+                    <span className="wishlist-mini__name">
+                      <span className="wishlist-mini__pri">#{item.priority}</span>{item.name}
+                    </span>
+                    <span className="wishlist-mini__pct">{Math.round(pct)}%</span>
                   </div>
-                )
-              })}
-            </div>
-
-            {totalWishlistNeeded > 0 && (
+                  <div className="progress-bar">
+                    <div className="progress-bar__fill progress-bar__fill--wishlist" style={{width:`${pct}%`}} />
+                  </div>
+                  <div className="wishlist-mini__info">
+                    <span>{formatRupiah(item.saved_amount)} / {formatRupiah(item.price)}</span>
+                    {kurang>0
+                      ? <span className="wishlist-mini__kurang">
+                          kurang {formatRupiah(kurang,true)}
+                          {weeksEst && <span className="text-plan"> · ~{weeksEst} mgg</span>}
+                        </span>
+                      : <span style={{color:'var(--mint-dark)',fontWeight:700}}>✅ Cukup!</span>}
+                  </div>
+                </div>
+              )
+            })}
+            {totalKurang > 0 && (
               <div className="wishlist-total-hint">
-                <span>Total kurang untuk semua wishlist:</span>
-                <strong>{formatRupiah(totalWishlistNeeded)}</strong>
+                <span>Total kurang semua wishlist</span>
+                <strong>{formatRupiah(totalKurang)}</strong>
               </div>
             )}
-          </section>
+          </div>
         )}
 
         {/* ── Pindah Uang ── */}
-        <section className="section">
-          <button className="btn btn--ghost btn--full" onClick={() => setShowTransfer(!showTransfer)}>
-            {showTransfer ? '✕ Tutup' : '↔ Pindah uang antar pos'}
+        <div>
+          <button className="btn btn--ghost btn--full" onClick={()=>setShowTransfer(!showTransfer)}>
+            {showTransfer?'✕ Tutup':'↔ Pindah uang antar pos'}
           </button>
           {showTransfer && (
-            <form className="card" onSubmit={handleTransferSubmit}>
+            <form className="card" style={{marginTop:'8px'}} onSubmit={submitTransfer}>
               <div className="transfer-row">
-                <select className="form-select" value={transfer.from}
-                  onChange={(e) => setTransfer((t)=>({...t, from:e.target.value}))}>
-                  {pocketOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                <select className="form-select" value={tr.from} onChange={(e)=>setTr(t=>({...t,from:e.target.value}))}>
+                  {PO.map((o)=><option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 <span className="transfer-arrow">→</span>
-                <select className="form-select" value={transfer.to}
-                  onChange={(e) => setTransfer((t)=>({...t, to:e.target.value}))}>
-                  {pocketOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                <select className="form-select" value={tr.to} onChange={(e)=>setTr(t=>({...t,to:e.target.value}))}>
+                  {PO.map((o)=><option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
-              <div className="form-group" style={{ marginTop:'10px' }}>
+              <div className="form-group">
                 <input type="number" className="form-input" placeholder="Nominal (Rp)"
-                  value={transfer.amount} onChange={(e) => setTransfer((t)=>({...t, amount:e.target.value}))}
+                  value={tr.amount} onChange={(e)=>setTr(t=>({...t,amount:e.target.value}))}
                   inputMode="numeric" min="1" required />
               </div>
               <button type="submit" className="btn btn--primary btn--full"
-                disabled={submitting || transfer.from===transfer.to || !transfer.amount}>
-                💸 Pindahkan
-              </button>
+                disabled={busy||tr.from===tr.to||!tr.amount}>💸 Pindahkan</button>
             </form>
           )}
-        </section>
+        </div>
 
-      </main>
+      </div>
     </div>
   )
 }
 
-// ── Sub-komponen ────────────────────────────────────────────
-function MoneyRow({ icon, label, value, sub, isNeg, highlight, big, warn }) {
+function MRow({icon,label,val,sub,warn,isNeg,hl,free,big}) {
   return (
-    <div className={`money-row ${highlight ? 'money-row--highlight' : ''}`}>
+    <div className={`money-row ${hl?'money-row--hl':''} ${free?'money-row--free':''}`}>
       <div className="money-row__left">
         <span className="money-row__icon">{icon}</span>
         <div>
           <span className="money-row__label">{label}</span>
-          {sub && <span className="money-row__sub">{sub}</span>}
+          {sub  && <span className="money-row__sub">{sub}</span>}
           {warn && <span className="money-row__warn">⚠️ {warn}</span>}
         </div>
       </div>
-      <span className={`money-row__val ${big?'money-row__val--big':''} ${isNeg?'money-row__val--neg':''} ${highlight&&value>0?'money-row__val--pos':''}`}>
-        {isNeg ? '-' : ''}{formatRupiah(Math.abs(value))}
+      <span className={`money-row__val ${big?'money-row__val--big':''} ${isNeg?'money-row__val--neg':''} ${(hl||free)&&val>0?'money-row__val--pos':''}`}>
+        {isNeg?'-':''}{formatRupiah(Math.abs(val))}
       </span>
     </div>
   )

@@ -21,130 +21,135 @@ export default function HomePage() {
   const tabunganPocket = getPocketByName('tabungan')
   const wishlistPocket = getPocketByName('wishlist')
 
-  // Pengeluaran hari ini
   const todayExpense = useMemo(() =>
-    transactions.filter((t) => t.type === 'expense' && t.date === todayStr).reduce((s, t) => s + t.amount, 0),
+    transactions.filter((t) => t.type === 'expense' && t.date === todayStr).reduce((s,t)=>s+t.amount,0),
     [transactions, todayStr])
 
-  // Kebutuhan harian
+  const todayIncome = useMemo(() =>
+    transactions.filter((t) => t.type === 'income' && t.date === todayStr).reduce((s,t)=>s+t.amount,0),
+    [transactions, todayStr])
+
   const dailyNeed = useMemo(() => {
     if (!profile) return 0
-    const transport = isWFH ? 0 : (profile.transport_amount || 14000)
-    return transport + (profile.lunch_amount || 15000) + (profile.dinner_amount || 20000)
+    const tr = isWFH ? 0 : (profile.transport_amount || 14000)
+    return tr + (profile.lunch_amount || 15000) + (profile.dinner_amount || 20000)
   }, [profile, isWFH])
 
-  // Grafik minggu ini
+  // Grafik minggu
   const weekDates  = getWeekDates(today)
   const weeklyData = useMemo(() =>
     weekDates.map((d) => {
-      const dateStr = d.toISOString().split('T')[0]
-      const total   = transactions.filter((t) => t.type === 'expense' && t.date === dateStr).reduce((s, t) => s + t.amount, 0)
-      return { dateStr, total, label: ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][d.getDay()] }
-    }),
-    [transactions, weekDates])
-  const maxWeekly = Math.max(...weeklyData.map((d) => d.total), 1)
+      const ds    = d.toISOString().split('T')[0]
+      const total = transactions.filter((t) => t.type === 'expense' && t.date === ds).reduce((s,t)=>s+t.amount,0)
+      return { ds, total, label: ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][d.getDay()] }
+    }), [transactions, weekDates])
+  const maxW = Math.max(...weeklyData.map((d) => d.total), 1)
 
-  // Mood
   const mood = useMemo(() => {
     if (todayExpense === 0) return 'neutral'
-    if (todayExpense > dailyNeed * 1.5) return 'sad'
-    if (todayExpense <= dailyNeed * 0.7) return 'happy'
+    if (todayExpense > dailyNeed * 1.4) return 'sad'
+    if (todayExpense <= dailyNeed * 0.6) return 'happy'
     return 'neutral'
   }, [todayExpense, dailyNeed])
 
-  // Wishlist teratas
-  const topWishlist = wishlist.filter((w) => !w.is_completed).sort((a, b) => a.priority - b.priority)[0]
-
-  // Sisa untuk jajan hari ini (setelah kebutuhan rutin)
-  const sisaJajan = Math.max(0, (jajanPocket?.balance || 0) - todayExpense)
+  const topWishlist = wishlist.filter((w) => !w.is_completed).sort((a,b)=>a.priority-b.priority)[0]
 
   return (
     <div className="page">
-      <header className="page__header">
-        <div className="home-header">
+
+      {/* Header */}
+      <div className="home-header">
+        <div className="home-header__left">
+          <h1>
+            {getGreeting()} 👋
+          </h1>
+          <p className="home-header__date">
+            {today.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})}
+            {isWFH && <span className="badge-wfh">WFH</span>}
+          </p>
+        </div>
+        <Mascot mood={mood} size={52} />
+      </div>
+
+      {/* Hero card */}
+      <div className="hero-card">
+        <div className="hero-card__top">
           <div>
-            <h1 className="home-header__title">Halo! 👋</h1>
-            <p className="home-header__date">
-              {today.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
-              {isWFH && <span className="badge-wfh" style={{ marginLeft: '0.4rem' }}>WFH</span>}
-            </p>
+            <p className="hero-card__label">Sisa uang jajan</p>
+            <p className="hero-card__amount">{formatRupiah(jajanPocket?.balance || 0)}</p>
           </div>
-          <Mascot mood={mood} size={52} />
+          <Link to="/transaksi" className="btn btn--white btn--sm">+ Catat</Link>
         </div>
-      </header>
-
-      <main className="page__content">
-
-        {/* Kartu utama */}
-        <div className="hero-card">
-          <div className="hero-card__row">
-            <div>
-              <p className="hero-card__label">Sisa uang jajan</p>
-              <p className="hero-card__amount">{formatRupiah(jajanPocket?.balance || 0)}</p>
-            </div>
-            <Link to="/transaksi" className="btn btn--white btn--sm">+ Catat</Link>
+        <div className="hero-card__stats">
+          <div className="hero-stat">
+            <p className="hero-stat__label">Keluar hari ini</p>
+            <p className="hero-stat__val">{formatRupiah(todayExpense)}</p>
           </div>
-          <div className="hero-card__sub">
-            <span>Keluar hari ini: <strong>{formatRupiah(todayExpense)}</strong></span>
-            <span>Estimasi: <strong>{formatRupiah(dailyNeed)}</strong></span>
+          <div className="hero-stat">
+            <p className="hero-stat__label">Estimasi harian</p>
+            <p className="hero-stat__val">{formatRupiah(dailyNeed)}</p>
           </div>
-          {todayExpense > dailyNeed && (
-            <p className="hero-card__warn">⚠️ Pengeluaran hari ini melebihi estimasi harian!</p>
-          )}
+          <div className="hero-stat">
+            <p className="hero-stat__label">Masuk hari ini</p>
+            <p className="hero-stat__val">+{formatRupiah(todayIncome)}</p>
+          </div>
         </div>
+        {todayExpense > dailyNeed && (
+          <p className="hero-card__warn">⚠️ Pengeluaran melewati estimasi harian!</p>
+        )}
+      </div>
 
-        {/* Pos uang — 3 kolom compact */}
-        <div className="pocket-row">
-          {[
-            { icon: '🍜', label: 'Jajan',    pocket: jajanPocket },
-            { icon: '🏦', label: 'Tabungan', pocket: tabunganPocket },
-            { icon: '✨', label: 'Wishlist', pocket: wishlistPocket },
-          ].map(({ icon, label, pocket }) => (
-            <Link key={label} to="/tabungan" className="pocket-mini">
-              <span className="pocket-mini__icon">{icon}</span>
-              <span className="pocket-mini__label">{label}</span>
-              <span className="pocket-mini__amount">{formatRupiah(pocket?.balance || 0)}</span>
-            </Link>
-          ))}
-        </div>
+      {/* Pocket grid */}
+      <div className="pocket-grid" style={{ marginTop:'12px' }}>
+        {[
+          { icon:'🍜', label:'Uang Jajan', val: jajanPocket?.balance||0, cls:'peach', to:'/tabungan' },
+          { icon:'🏦', label:'Tabungan',   val: tabunganPocket?.balance||0, cls:'mint',  to:'/tabungan' },
+          { icon:'✨', label:'Wishlist',   val: wishlistPocket?.balance||0, cls:'lav',   to:'/wishlist' },
+        ].map(({ icon, label, val, cls, to }) => (
+          <Link key={label} to={to} className={`pocket-tile pocket-tile--${cls}`}>
+            <span className="pocket-tile__icon">{icon}</span>
+            <span className="pocket-tile__label">{label}</span>
+            <span className="pocket-tile__val">{formatRupiah(val)}</span>
+          </Link>
+        ))}
+      </div>
+
+      <div className="page__content" style={{ paddingTop:'12px' }}>
 
         {/* Grafik minggu ini */}
-        <section className="card">
-          <h2 className="card__section-title">Minggu ini 📊</h2>
+        <div className="card">
+          <p className="section-title" style={{marginBottom:'2px'}}>Pengeluaran minggu ini 📊</p>
           <div className="week-chart">
-            {weeklyData.map((d, i) => {
-              const isToday  = d.dateStr === todayStr
-              const heightPct = (d.total / maxWeekly) * 100
+            {weeklyData.map((d,i) => {
+              const isToday = d.ds === todayStr
+              const h = (d.total / maxW) * 100
               return (
-                <div key={i} className={`week-chart__col ${isToday ? 'week-chart__col--today' : ''}`}>
-                  {d.total > 0 && (
-                    <span className="week-chart__val">{formatRupiah(d.total, true)}</span>
-                  )}
-                  <div className="week-chart__bar" style={{ height: `${Math.max(heightPct, d.total > 0 ? 6 : 0)}%` }} />
+                <div key={i} className={`week-chart__col ${isToday?'week-chart__col--today':''}`}>
+                  {d.total > 0 && <span className="week-chart__val">{formatRupiah(d.total,true)}</span>}
+                  <div className="week-chart__bar" style={{height:`${Math.max(h,d.total>0?6:0)}%`}} />
                   <span className="week-chart__label">{d.label}</span>
                 </div>
               )
             })}
           </div>
-        </section>
+        </div>
 
         {/* Wishlist teratas */}
         {topWishlist && (
-          <Link to="/wishlist" className="card wishlist-snap">
+          <Link to="/wishlist" className="wishlist-snap">
+            <p className="wishlist-snap__label">Wishlist teratas ✨</p>
             <div className="wishlist-snap__row">
-              <div>
-                <p className="wishlist-snap__label">Wishlist teratas ✨</p>
-                <p className="wishlist-snap__name">{topWishlist.name}</p>
-              </div>
-              <span className="wishlist-snap__pct">
-                {Math.round((topWishlist.saved_amount / topWishlist.price) * 100)}%
-              </span>
+              <span className="wishlist-snap__name">{topWishlist.name}</span>
+              <span className="wishlist-snap__pct">{Math.round((topWishlist.saved_amount/topWishlist.price)*100)}%</span>
             </div>
-            <div className="progress-bar" style={{ marginTop: '0.5rem' }}>
+            <div className="progress-bar">
               <div className="progress-bar__fill progress-bar__fill--wishlist"
-                style={{ width: `${Math.min((topWishlist.saved_amount / topWishlist.price) * 100, 100)}%` }} />
+                style={{width:`${Math.min((topWishlist.saved_amount/topWishlist.price)*100,100)}%`}} />
             </div>
-            <p className="wishlist-snap__sub">{formatRupiah(topWishlist.saved_amount)} / {formatRupiah(topWishlist.price)}</p>
+            <p className="wishlist-snap__sub">
+              {formatRupiah(topWishlist.saved_amount)} terkumpul dari {formatRupiah(topWishlist.price)}
+              {' · kurang '}<strong>{formatRupiah(topWishlist.price-topWishlist.saved_amount)}</strong>
+            </p>
           </Link>
         )}
 
@@ -153,12 +158,20 @@ export default function HomePage() {
           <div className="empty-state">
             <span className="empty-state__emoji">🥚</span>
             <p>Belum ada catatan nih~</p>
-            <p className="text-muted">Yuk mulai catat!</p>
-            <Link to="/transaksi" className="btn btn--primary" style={{ marginTop: '1rem' }}>Catat sekarang</Link>
+            <p>Yuk mulai catat keuanganmu!</p>
+            <Link to="/transaksi" className="btn btn--primary mt-sm">+ Catat sekarang</Link>
           </div>
         )}
 
-      </main>
+      </div>
     </div>
   )
+}
+
+function getGreeting() {
+  const h = new Date().getHours()
+  if (h < 11) return 'Pagi!'
+  if (h < 15) return 'Siang!'
+  if (h < 18) return 'Sore!'
+  return 'Malam!'
 }
