@@ -58,7 +58,10 @@ export default function TransactionsPage() {
     const { error } = await addTransaction({ type: 'expense', amount, category: expF.category, note: expF.note, date: expF.date })
     if (error) { toast('Gagal menyimpan', 'error'); setBusy(false); return }
     const jp = getPocketByName('jajan')
-    if (jp) await updatePocketBalance(jp.id, jp.balance - amount)
+    if (jp) await updatePocketBalance(jp.id, jp.balance - amount, {
+      source: `Pengeluaran — ${LABEL[expF.category] || expF.category}`,
+      note: expF.note,
+    })
     setBusy(false)
     toast('Pengeluaran dicatat ✓', 'success')
     setExpF({ amount: '', category: 'makan_siang', note: '', date: todayStr })
@@ -73,7 +76,10 @@ export default function TransactionsPage() {
     const { error } = await addTransaction({ type: 'income', amount, category: incF.category, note: incF.note, date: incF.date })
     if (error) { toast('Gagal menyimpan', 'error'); setBusy(false); return }
     const jp = getPocketByName('jajan')
-    if (jp) await updatePocketBalance(jp.id, jp.balance + amount)
+    if (jp) await updatePocketBalance(jp.id, jp.balance + amount, {
+      source: `Pemasukan — ${LABEL[incF.category] || incF.category}`,
+      note: incF.note,
+    })
     setBusy(false)
     toast(`+${formatRupiah(amount)} masuk ke Uang Jajan`, 'success')
     setIncF({ amount: '', category: 'uang_saku', note: '', date: todayStr })

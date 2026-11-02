@@ -22,6 +22,17 @@ export default function WishlistPage() {
   const wBalance       = wp?.balance || 0
   const totalKurang    = activeItems.reduce((s, w) => s + Math.max(0, w.price - w.saved_amount), 0)
 
+  async function handleMarkPurchased(item) {
+    setBusy(true)
+    const { error } = await updateWishlistItem(item.id, {
+      is_completed: !item.is_completed,
+      purchased_at: !item.is_completed ? new Date().toISOString() : null,
+    })
+    setBusy(false)
+    if (error) toast('Gagal update', 'error')
+    else toast(item.is_completed ? 'Ditandai belum dibeli' : '🎉 Ditandai sudah dibeli!', 'success')
+  }
+
   async function handleAdd(e) {
     e.preventDefault()
     if (!form.name || !form.price) return
@@ -213,6 +224,18 @@ export default function WishlistPage() {
                       <p className="wl-card__price">{formatRupiah(item.price)}</p>
                     </div>
                     <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                      <button
+                        className="btn btn--ghost btn--xs"
+                        onClick={() => handleMarkPurchased(item)}
+                        style={{
+                          background: item.is_completed ? 'rgba(52,211,153,.2)' : 'transparent',
+                          borderColor: item.is_completed ? 'var(--green)' : undefined,
+                          color: item.is_completed ? 'var(--green)' : undefined,
+                        }}
+                        title={item.is_completed ? 'Tandai belum dibeli' : 'Tandai sudah dibeli'}
+                      >
+                        {item.is_completed ? '✓' : '○'}
+                      </button>
                       <button className="btn btn--ghost btn--xs"
                         onClick={() => setEditItem({ id: item.id, name: item.name, price: String(item.price), target_date: item.target_date || '', priority: String(item.priority) })}>
                         ✏️
@@ -290,6 +313,11 @@ export default function WishlistPage() {
                   <div>
                     <p style={{ fontWeight: 700, fontSize: '0.9rem' }}>✅ {item.name}</p>
                     <p className="t3" style={{ fontSize: '0.75rem', marginTop: 2 }}>{formatRupiah(item.price)}</p>
+                    {item.purchased_at && (
+                      <p className="t3" style={{ fontSize: '0.7rem', marginTop: 1 }}>
+                        Dibeli: {new Date(item.purchased_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                    )}
                   </div>
                   <button className="btn btn--ghost btn--xs" onClick={() => handleDelete(item.id, item.name)}>🗑️</button>
                 </div>

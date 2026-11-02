@@ -10,6 +10,7 @@ const HomePage         = lazy(() => import('./pages/HomePage'))
 const TransactionsPage = lazy(() => import('./pages/TransactionsPage'))
 const PocketsPage      = lazy(() => import('./pages/PocketsPage'))
 const WishlistPage     = lazy(() => import('./pages/WishlistPage'))
+const InsightsPage     = lazy(() => import('./pages/InsightsPage'))
 const SettingsPage     = lazy(() => import('./pages/SettingsPage'))
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
                 <Route path="/transaksi"  element={<TransactionsPage />} />
                 <Route path="/tabungan"   element={<PocketsPage />} />
                 <Route path="/wishlist"   element={<WishlistPage />} />
+                <Route path="/insights"   element={<InsightsPage />} />
                 <Route path="/pengaturan" element={<SettingsPage />} />
                 <Route path="*"           element={<Navigate to="/" replace />} />
               </Routes>

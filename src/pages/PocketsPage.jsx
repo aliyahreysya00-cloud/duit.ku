@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { usePockets } from '../hooks/usePockets'
+import { usePocketHistory } from '../hooks/usePocketHistory'
 import { useTransactions } from '../hooks/useTransactions'
 import { useProfile } from '../hooks/useProfile'
 import { useWishlist } from '../hooks/useWishlist'
@@ -8,18 +9,21 @@ import { formatRupiah, isWfhDay, getWeekDates, getLocalDateStr } from '../lib/ut
 
 export default function PocketsPage() {
   const { updatePocketBalance, transferBetweenPockets, getPocketByName } = usePockets()
+  const { history: allHistory, loading: histLoading } = usePocketHistory()
   const { transactions } = useTransactions()
   const { profile } = useProfile()
   const { wishlist } = useWishlist()
   const toast = useToast()
 
-  const [editP, setEditP]     = useState(null)  // menyimpan key string: 'jajan'|'tabungan'|'wishlist'
+  const [editP, setEditP]     = useState(null)
   const [editAmt, setEditAmt] = useState('')
   const [busy, setBusy]       = useState(false)
   const [showTr, setShowTr]   = useState(false)
   const [tr, setTr]           = useState({ from: 'jajan', to: 'tabungan', amount: '' })
   const [showPrev, setShowPrev] = useState(false)
   const [prev, setPrev]       = useState({ tabungan: '', wishlist: '' })
+  const [activeTab, setActiveTab] = useState('overview') // 'overview' | 'history'
+  const [histFilter, setHistFilter] = useState('semua')  // 'semua' | 'jajan' | 'tabungan' | 'wishlist'
 
   const today     = new Date()
   const todayStr  = getLocalDateStr(today)
@@ -102,7 +106,9 @@ export default function PocketsPage() {
     const fp  = pm[tr.from], toP = pm[tr.to]
     if (!fp || !toP) return
     setBusy(true)
-    const { error } = await transferBetweenPockets(fp.id, toP.id, amt)
+    const { error } = await transferBetweenPockets(fp.id, toP.id, amt, {
+      source: `Transfer: ${fp.name} → ${toP.name}`,
+    })
     setBusy(false)
     if (error) { toast(error, 'error'); return }
     toast(`${formatRupiah(amt)} dipindah ✓`, 'success')
@@ -113,7 +119,9 @@ export default function PocketsPage() {
   async function sisihkan() {
     if (!jp || !tp || estNabung <= 0) return
     setBusy(true)
-    const { error } = await transferBetweenPockets(jp.id, tp.id, estNabung)
+    const { error } = await transferBetweenPockets(jp.id, tp.id, estNabung, {
+      source: 'Sisihkan nabung dari Uang Jajan',
+    })
     setBusy(false)
     if (error) { toast(error, 'error'); return }
     toast(`${formatRupiah(estNabung)} disisihkan ke Tabungan`, 'success')
@@ -150,6 +158,8 @@ export default function PocketsPage() {
       </div>
 
       <div className="page__content">
+
+        {activeTab === 'overview' && (<>
 
         {/* ── Pos Uang ── */}
         <div className="pocket-grid">
@@ -362,6 +372,100 @@ export default function PocketsPage() {
               Pindahkan
             </button>
           </form>
+        )}
+
+        </>)}
+
+        {/* ── Tab bar Overview / History ── */}
+        <div className="tabs" style={{ marginTop: 4 }}>
+          <button className={`tabs__tab ${activeTab === 'overview' ? 'tabs__tab--active' : ''}`}
+            onClick={() => setActiveTab('overview')}>Overview</button>
+          <button className={`tabs__tab ${activeTab === 'history' ? 'tabs__tab--active' : ''}`}
+            onClick={() => setActiveTab('history')}>Riwayat Saldo</button>
+        </div>
+
+        {/* ── History Section ── */}
+        {activeTab === 'history' && (
+          <div>
+            {/* Filter per pos */}
+            <div className="filter-chips" style={{ marginBottom: 10 }}>
+              {[
+                { key: 'semua',    label: 'Semua' },
+                { key: 'jajan',    label: '🍜 Jajan' },
+                { key: 'tabungan', label: '🏦 Tabungan' },
+                { key: 'wishlist', label: '✨ Wishlist' },
+              ].map((f) => (
+                <button key={f.key} className={`chip ${histFilter === f.key ? 'chip--active' : ''}`}
+                  onClick={() => setHistFilter(f.key)}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {histLoading ? (
+              <p style={{ color: 'var(--t3)', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>Memuat...</p>
+            ) : (() => {
+              const filtered = histFilter === 'semua'
+                ? allHistory
+                : allHistory.filter((h) => h.pocket_name === histFilter)
+              if (filtered.length === 0) return (
+                <div className="empty-state" style={{ padding: '24px 0' }}>
+                  <div className="empty-state__icon">📋</div>
+                  <p>Belum ada riwayat</p>
+                  <p className="t3">Mulai catat transaksi untuk melihat riwayat saldo</p>
+                </div>
+              )
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {filtered.map((h) => {
+                    const isIn = h.type === 'in'
+                    const pocketLabel = { jajan: '🍜 Uang Jajan', tabungan: '🏦 Tabungan', wishlist: '✨ Wishlist' }[h.pocket_name] || h.pocket_name
+                    const dt = new Date(h.created_at)
+                    const dateStr = dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                    const timeStr = dt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                    return (
+                      <div key={h.id} style={{
+                        background: 'var(--g)', border: '1px solid var(--g-b)',
+                        borderRadius: 'var(--r2)', padding: '11px 13px',
+                        display: 'flex', alignItems: 'flex-start', gap: 10,
+                        borderLeft: `3px solid ${isIn ? 'var(--green)' : 'var(--red)'}`,
+                      }}>
+                        {/* Icon */}
+                        <div style={{
+                          width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: isIn ? 'rgba(52,211,153,.15)' : 'rgba(248,113,113,.15)',
+                          fontSize: '1rem',
+                        }}>
+                          {isIn ? '↑' : '↓'}
+                        </div>
+                        {/* Info */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontWeight: 600, fontSize: '0.85rem' }}>{h.source}</p>
+                          {h.note && <p style={{ fontSize: '0.72rem', color: 'var(--t3)', marginTop: 1 }}>{h.note}</p>}
+                          <p style={{ fontSize: '0.7rem', color: 'var(--t3)', marginTop: 3 }}>
+                            {pocketLabel} · {dateStr} {timeStr}
+                          </p>
+                        </div>
+                        {/* Amount + saldo setelah */}
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <p style={{
+                            fontWeight: 700, fontSize: '0.9rem',
+                            color: isIn ? 'var(--green)' : 'var(--red)',
+                          }}>
+                            {isIn ? '+' : '-'}{formatRupiah(h.amount)}
+                          </p>
+                          <p style={{ fontSize: '0.68rem', color: 'var(--t3)', marginTop: 2 }}>
+                            saldo: {formatRupiah(h.balance_after)}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
         )}
 
       </div>
