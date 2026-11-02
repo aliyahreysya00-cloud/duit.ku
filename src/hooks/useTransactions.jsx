@@ -17,7 +17,7 @@ export function useTransactions() {
     setLoading(true)
     const { data, error } = await supabase
       .from('transactions')
-      .select('*')
+      .select('*, pockets(name)')
       .eq('user_id', user.id)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -26,8 +26,14 @@ export function useTransactions() {
     if (error) {
       setError(error.message)
     } else {
-      setTransactions(data)
-      cacheSet(CACHE_KEY, data)
+      // Flatten pockets join → tambahkan pocket_name langsung ke setiap transaksi
+      const normalized = (data || []).map((t) => ({
+        ...t,
+        pocket_name: t.pockets?.name || 'jajan',
+        pockets: undefined,
+      }))
+      setTransactions(normalized)
+      cacheSet(CACHE_KEY, normalized)
     }
     setLoading(false)
   }, [user])
