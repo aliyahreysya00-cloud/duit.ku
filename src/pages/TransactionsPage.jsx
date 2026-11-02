@@ -18,8 +18,15 @@ const INC_CATS = [
   { value: 'gaji_magang', label: '💼 Gaji Magang' },
   { value: 'lainnya',     label: '📦 Lainnya'     },
 ]
-const ICON  = { transport:'🚌', makan_siang:'🍱', makan_malam:'🍜', jajan:'🧋', lainnya:'📦', uang_saku:'💰', gaji_magang:'💼' }
-const LABEL = { transport:'Transport', makan_siang:'Makan Siang', makan_malam:'Makan Malam', jajan:'Jajan', lainnya:'Lainnya', uang_saku:'Uang Saku', gaji_magang:'Gaji Magang' }
+
+const ICON = {
+  transport: '🚌', makan_siang: '🍱', makan_malam: '🍜',
+  jajan: '🧋', lainnya: '📦', uang_saku: '💰', gaji_magang: '💼',
+}
+const LABEL = {
+  transport: 'Transport', makan_siang: 'Makan Siang', makan_malam: 'Makan Malam',
+  jajan: 'Jajan', lainnya: 'Lainnya', uang_saku: 'Uang Saku', gaji_magang: 'Gaji Magang',
+}
 
 export default function TransactionsPage() {
   const { transactions, addTransaction, deleteTransaction, refetch } = useTransactions()
@@ -31,10 +38,10 @@ export default function TransactionsPage() {
   const todayStr = today.toISOString().split('T')[0]
   const isWFH    = profile ? isWfhDay(today, profile.wfh_days) : false
 
-  const [tab,  setTab]  = useState('expense')
-  const [expF, setExpF] = useState({ amount: '', category: 'makan_siang', note: '', date: todayStr })
-  const [incF, setIncF] = useState({ amount: '', category: 'uang_saku',   note: '', date: todayStr })
-  const [busy, setBusy] = useState(false)
+  const [tab,    setTab]    = useState('expense')
+  const [expF,   setExpF]   = useState({ amount: '', category: 'makan_siang', note: '', date: todayStr })
+  const [incF,   setIncF]   = useState({ amount: '', category: 'uang_saku',   note: '', date: todayStr })
+  const [busy,   setBusy]   = useState(false)
   const [filter, setFilter] = useState('semua')
   const [editTx, setEditTx] = useState(null)
 
@@ -42,6 +49,7 @@ export default function TransactionsPage() {
     transactions.some((t) => t.type === 'expense' && t.category === 'transport' && t.date === todayStr),
     [transactions, todayStr])
 
+  // ── Submit expense ────────────────────────────────────────
   async function submitExpense(e) {
     e.preventDefault()
     const amount = parseInt(expF.amount)
@@ -56,6 +64,7 @@ export default function TransactionsPage() {
     setExpF({ amount: '', category: 'makan_siang', note: '', date: todayStr })
   }
 
+  // ── Submit income ─────────────────────────────────────────
   async function submitIncome(e) {
     e.preventDefault()
     const amount = parseInt(incF.amount)
@@ -70,6 +79,7 @@ export default function TransactionsPage() {
     setIncF({ amount: '', category: 'uang_saku', note: '', date: todayStr })
   }
 
+  // ── Edit ──────────────────────────────────────────────────
   async function submitEdit(e) {
     e.preventDefault()
     if (!editTx) return
@@ -90,9 +100,10 @@ export default function TransactionsPage() {
     await refetch()
     setBusy(false)
     setEditTx(null)
-    toast('Transaksi diupdate ✓', 'success')
+    toast('Diupdate ✓', 'success')
   }
 
+  // ── Delete ────────────────────────────────────────────────
   async function handleDelete(tx) {
     if (!window.confirm(`Hapus ${LABEL[tx.category] || tx.category} ${formatRupiah(tx.amount)}?`)) return
     const jp = getPocketByName('jajan')
@@ -102,6 +113,7 @@ export default function TransactionsPage() {
     toast('Dihapus', 'info')
   }
 
+  // ── Filter ────────────────────────────────────────────────
   const filteredTx = useMemo(() => {
     const ws = new Date(today)
     ws.setDate(today.getDate() - today.getDay())
@@ -125,14 +137,14 @@ export default function TransactionsPage() {
       <div className="page__content">
 
         {/* Summary */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div className="stat-row">
           <div className="stat-pill">
-            <p className="stat-pill__label">Masuk hari ini</p>
-            <p className="stat-pill__val stat-pill__val--green">+{formatRupiah(todayIn)}</p>
+            <p className="stat-pill__lbl">Masuk hari ini</p>
+            <p className="stat-pill__val stat-pill__val--g">+{formatRupiah(todayIn)}</p>
           </div>
           <div className="stat-pill">
-            <p className="stat-pill__label">Keluar hari ini</p>
-            <p className="stat-pill__val stat-pill__val--orange">-{formatRupiah(todayOut)}</p>
+            <p className="stat-pill__lbl">Keluar hari ini</p>
+            <p className="stat-pill__val stat-pill__val--o">-{formatRupiah(todayOut)}</p>
           </div>
         </div>
 
@@ -163,7 +175,7 @@ export default function TransactionsPage() {
 
         {/* Form Pengeluaran */}
         {tab === 'expense' && (
-          <form className="glass" style={{ padding: 16 }} onSubmit={submitExpense}>
+          <form className="card" onSubmit={submitExpense}>
             <div className="form-group">
               <label className="form-label">Nominal</label>
               <input type="number" className="form-input form-input--amount"
@@ -198,7 +210,7 @@ export default function TransactionsPage() {
 
         {/* Form Pemasukan */}
         {tab === 'income' && (
-          <form className="glass" style={{ padding: 16 }} onSubmit={submitIncome}>
+          <form className="card" onSubmit={submitIncome}>
             <div className="form-group">
               <label className="form-label">Nominal</label>
               <input type="number" className="form-input form-input--amount"
@@ -239,8 +251,8 @@ export default function TransactionsPage() {
               <p className="modal-title">Edit Transaksi</p>
               <div className="form-group">
                 <label className="form-label">Nominal</label>
-                <input type="number" className="form-input form-input--amount" min="1" required inputMode="numeric"
-                  value={editTx.amount} onChange={(e) => setEditTx((t) => ({ ...t, amount: e.target.value }))} autoFocus />
+                <input type="number" className="form-input form-input--amount" min="1" required inputMode="numeric" autoFocus
+                  value={editTx.amount} onChange={(e) => setEditTx((t) => ({ ...t, amount: e.target.value }))} />
               </div>
               <div className="form-row">
                 <div className="form-group">
@@ -277,7 +289,11 @@ export default function TransactionsPage() {
           <div className="s-header">
             <p className="s-title">Riwayat</p>
             <div className="filter-chips">
-              {[{ key: 'semua', label: 'Semua' }, { key: 'hari_ini', label: 'Hari ini' }, { key: 'minggu_ini', label: 'Minggu ini' }].map((f) => (
+              {[
+                { key: 'semua',      label: 'Semua'      },
+                { key: 'hari_ini',   label: 'Hari ini'   },
+                { key: 'minggu_ini', label: 'Minggu ini' },
+              ].map((f) => (
                 <button key={f.key} className={`chip ${filter === f.key ? 'chip--active' : ''}`} onClick={() => setFilter(f.key)}>
                   {f.label}
                 </button>
@@ -286,7 +302,7 @@ export default function TransactionsPage() {
           </div>
 
           {filteredTx.length === 0 ? (
-            <div className="empty-state" style={{ padding: '28px 0' }}>
+            <div className="empty-state" style={{ padding: '24px 0' }}>
               <div className="empty-state__icon">🧾</div>
               <p>Belum ada transaksi</p>
             </div>
@@ -294,25 +310,25 @@ export default function TransactionsPage() {
             <ul className="tx-list">
               {filteredTx.map((tx) => (
                 <li key={tx.id} className="tx-item">
-                  <div className={`tx-item__dot tx-item__dot--${tx.type}`}>
-                    {tx.type === 'income' ? '💰' : ICON[tx.category] || '📦'}
+                  <div className={`tx-dot tx-dot--${tx.type === 'income' ? 'in' : 'out'}`}>
+                    {tx.type === 'income' ? '💰' : (ICON[tx.category] || '📦')}
                   </div>
-                  <div className="tx-item__info">
-                    <p className="tx-item__note">{tx.note || LABEL[tx.category] || tx.category}</p>
-                    <p className="tx-item__meta">
+                  <div className="tx-info">
+                    <p className="tx-note">{tx.note || LABEL[tx.category] || tx.category}</p>
+                    <p className="tx-meta">
                       {new Date(tx.date + 'T12:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
                       {' · '}{LABEL[tx.category] || tx.category}
                     </p>
                   </div>
-                  <p className={`tx-item__amount tx-item__amount--${tx.type}`}>
+                  <p className={`tx-amt tx-amt--${tx.type === 'income' ? 'in' : 'out'}`}>
                     {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
                   </p>
-                  <div className="tx-item__actions">
-                    <button className="tx-item__btn"
+                  <div className="tx-actions">
+                    <button className="tx-btn"
                       onClick={() => setEditTx({ id: tx.id, amount: String(tx.amount), category: tx.category, note: tx.note || '', date: tx.date, type: tx.type })}>
                       ✏️
                     </button>
-                    <button className="tx-item__btn" onClick={() => handleDelete(tx)}>🗑️</button>
+                    <button className="tx-btn" onClick={() => handleDelete(tx)}>🗑️</button>
                   </div>
                 </li>
               ))}

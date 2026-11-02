@@ -3,7 +3,7 @@ import { useProfile } from '../hooks/useProfile'
 import { useToast } from '../components/Toast'
 import { formatRupiah } from '../lib/utils'
 
-const DAY_LABELS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
+const DAYS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
 
 export default function SettingsPage() {
   const { profile, updateProfile } = useProfile()
@@ -28,12 +28,10 @@ export default function SettingsPage() {
     })
   }, [profile])
 
-  function toggleWfh(day) {
+  function toggleWfh(d) {
     setForm((f) => ({
       ...f,
-      wfh_days: f.wfh_days.includes(day)
-        ? f.wfh_days.filter((d) => d !== day)
-        : [...f.wfh_days, day],
+      wfh_days: f.wfh_days.includes(d) ? f.wfh_days.filter((x) => x !== d) : [...f.wfh_days, d],
     }))
   }
 
@@ -49,15 +47,15 @@ export default function SettingsPage() {
     })
     setBusy(false)
     if (error) toast('Gagal menyimpan', 'error')
-    else toast('Pengaturan tersimpan ✓', 'success')
+    else toast('Tersimpan ✓', 'success')
   }
 
   const estWeekly = (() => {
-    const tr  = parseInt(form.transport_amount) || 0
-    const lu  = parseInt(form.lunch_amount)     || 0
-    const di  = parseInt(form.dinner_amount)    || 0
+    const ta  = parseInt(form.transport_amount) || 0
+    const la  = parseInt(form.lunch_amount)     || 0
+    const da  = parseInt(form.dinner_amount)    || 0
     const wfh = form.wfh_days.filter((d) => d >= 1 && d <= 5).length
-    return tr * (5 - wfh) + (lu + di) * 5
+    return ta * (5 - wfh) + (la + da) * 5
   })()
 
   return (
@@ -70,8 +68,8 @@ export default function SettingsPage() {
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
           {/* Pengeluaran rutin */}
-          <div className="glass" style={{ padding: 18 }}>
-            <p className="s-title" style={{ marginBottom: 14 }}>Pengeluaran Rutin Harian</p>
+          <div className="card">
+            <p className="s-title" style={{ marginBottom: 16 }}>Pengeluaran Rutin Harian</p>
 
             <div className="form-group">
               <label className="form-label">🚌 Transport pulang-pergi (Rp)</label>
@@ -82,13 +80,13 @@ export default function SettingsPage() {
 
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">🍱 Makan siang</label>
+                <label className="form-label">🍱 Makan siang (Rp)</label>
                 <input type="number" className="form-input" inputMode="numeric" min="0"
                   value={form.lunch_amount}
                   onChange={(e) => setForm((f) => ({ ...f, lunch_amount: e.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label">🍜 Makan malam</label>
+                <label className="form-label">🍜 Makan malam (Rp)</label>
                 <input type="number" className="form-input" inputMode="numeric" min="0"
                   value={form.dinner_amount}
                   onChange={(e) => setForm((f) => ({ ...f, dinner_amount: e.target.value }))} />
@@ -96,35 +94,37 @@ export default function SettingsPage() {
             </div>
 
             <div className="form-group">
-              <p className="form-label">🏠 Hari WFH (tidak ada transport)</p>
+              <p className="form-label">🏠 Hari WFH — tidak ada transport</p>
               <div className="day-toggle-group">
                 {[1, 2, 3, 4, 5].map((d) => (
                   <button key={d} type="button"
                     className={`day-toggle ${form.wfh_days.includes(d) ? 'day-toggle--active' : ''}`}
                     onClick={() => toggleWfh(d)} aria-pressed={form.wfh_days.includes(d)}>
-                    {DAY_LABELS[d]}
+                    {DAYS[d]}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Estimasi */}
-            <div style={{ background: 'rgba(52,211,153,.1)', border: '1px solid rgba(52,211,153,.25)', borderRadius: 'var(--r1)', padding: '10px 12px', fontSize: '0.83rem', marginTop: 4 }}>
-              <span className="text-dim">Estimasi mingguan: </span>
-              <span style={{ fontWeight: 700, color: 'var(--accent-3)' }}>{formatRupiah(estWeekly)}</span>
-              <span className="text-muted"> (transport {5 - form.wfh_days.filter((d)=>d>=1&&d<=5).length} hari + makan 5 hari)</span>
+            <div style={{
+              background: 'rgba(52,211,153,.1)', border: '1px solid rgba(52,211,153,.22)',
+              borderRadius: 'var(--r1)', padding: '10px 12px', fontSize: '0.82rem',
+            }}>
+              <span className="t2">Estimasi mingguan: </span>
+              <span className="grn fw7">{formatRupiah(estWeekly)}</span>
+              <span className="t3"> (transport {5 - form.wfh_days.filter((d) => d >= 1 && d <= 5).length} hari + makan 5 hari)</span>
             </div>
           </div>
 
           {/* Target nabung */}
-          <div className="glass" style={{ padding: 18 }}>
-            <p className="s-title" style={{ marginBottom: 14 }}>Target Nabung</p>
+          <div className="card">
+            <p className="s-title" style={{ marginBottom: 16 }}>Target Nabung</p>
             <div className="form-group">
-              <label className="form-label">🐷 Persentase dari uang jajan ({form.saving_percent}%)</label>
+              <label className="form-label">🐷 Persentase dari uang jajan — {form.saving_percent}%</label>
               <input type="range" min="5" max="50" step="5"
                 value={form.saving_percent}
                 onChange={(e) => setForm((f) => ({ ...f, saving_percent: Number(e.target.value) }))} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: 'var(--t3)', marginTop: 3 }}>
                 <span>5%</span><span>50%</span>
               </div>
             </div>
@@ -133,9 +133,10 @@ export default function SettingsPage() {
           <button type="submit" className="btn btn--primary btn--full" disabled={busy}>
             {busy ? 'Menyimpan...' : 'Simpan Pengaturan'}
           </button>
+
         </form>
 
-        <p style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 8 }}>
+        <p style={{ textAlign: 'center', fontSize: '0.68rem', color: 'var(--t3)', marginTop: 8 }}>
           duit.ku v0.2.0
         </p>
       </div>
