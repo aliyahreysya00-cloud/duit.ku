@@ -1,15 +1,8 @@
-import Mascot from './Mascot'
-
-export default function LoadingScreen({ message = 'Bentar ya, lagi ngitung...' }) {
+export default function LoadingScreen({ message = 'Loading...' }) {
   return (
     <div className="loading-screen" role="status" aria-label={message}>
-      <div className="loading-screen__mascot">
-        <Mascot mood="neutral" size={80} />
-      </div>
+      <div className="loading-screen__spinner" aria-hidden="true" />
       <p className="loading-screen__text">{message}</p>
-      <div className="loading-screen__dots" aria-hidden="true">
-        <span /><span /><span />
-      </div>
     </div>
   )
 }

@@ -1,43 +1,18 @@
-import { useState, useEffect, createContext, useContext } from 'react'
-import { supabase } from '../lib/supabase'
-import { cacheClear } from '../lib/localStorage'
+/**
+ * Auth disederhanakan — tidak ada login/logout.
+ * User ID di-hardcode via environment variable atau konstanta.
+ */
+import { createContext, useContext } from 'react'
+import { USER_ID } from '../lib/user'
 
 const AuthContext = createContext(null)
 
+// User object statis — tidak perlu network call
+const STATIC_USER = { id: USER_ID }
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(undefined) // undefined = masih loading
-
-  useEffect(() => {
-    // cek session saat pertama load
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-    })
-
-    // dengarkan perubahan auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  async function signInWithMagicLink(email) {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: window.location.origin,
-      },
-    })
-    return { error }
-  }
-
-  async function signOut() {
-    cacheClear()
-    await supabase.auth.signOut()
-  }
-
   return (
-    <AuthContext.Provider value={{ user, signInWithMagicLink, signOut }}>
+    <AuthContext.Provider value={{ user: STATIC_USER }}>
       {children}
     </AuthContext.Provider>
   )

@@ -1,30 +1,70 @@
 import { NavLink } from 'react-router-dom'
 
-const navItems = [
-  { to: '/',            icon: '🏠', label: 'Beranda'  },
-  { to: '/transaksi',   icon: '💸', label: 'Catat'    },
-  { to: '/tabungan',    icon: '🐷', label: 'Nabung'   },
-  { to: '/wishlist',    icon: '✨', label: 'Wishlist' },
-  { to: '/pengaturan',  icon: '⚙️', label: 'Atur'     },
+const NAV = [
+  { to: '/',           label: 'Home',     icon: HomeIcon    },
+  { to: '/transaksi',  label: 'Catat',    icon: PlusIcon    },
+  { to: '/tabungan',   label: 'Nabung',   icon: PigIcon     },
+  { to: '/wishlist',   label: 'Wishlist', icon: StarIcon    },
+  { to: '/pengaturan', label: 'Atur',     icon: GearIcon    },
 ]
 
 export default function BottomNav() {
   return (
     <nav className="bottom-nav" aria-label="Navigasi utama">
-      {navItems.map(({ to, icon, label }) => (
+      {NAV.map(({ to, label, icon: Icon }) => (
         <NavLink
           key={to}
           to={to}
           end={to === '/'}
-          className={({ isActive }) =>
-            `bottom-nav__item ${isActive ? 'bottom-nav__item--active' : ''}`
-          }
+          className={({ isActive }) => `nav-item ${isActive ? 'nav-item--active' : ''}`}
           aria-label={label}
         >
-          <span className="bottom-nav__icon" aria-hidden="true">{icon}</span>
-          <span className="bottom-nav__label">{label}</span>
+          <span className="nav-item__icon" aria-hidden="true"><Icon /></span>
+          <span className="nav-item__label">{label}</span>
         </NavLink>
       ))}
     </nav>
+  )
+}
+
+/* ── SVG Icons ── */
+function HomeIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+  )
+}
+function PlusIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <circle cx="12" cy="12" r="9"/>
+      <line x1="12" y1="8" x2="12" y2="16"/>
+      <line x1="8" y1="12" x2="16" y2="12"/>
+    </svg>
+  )
+}
+function PigIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 9c0-3.31-3.13-6-7-6S5 5.69 5 9c0 1.04.26 2.01.73 2.87L4 20h4l1-3h6l1 3h4l-1.73-8.13A6.93 6.93 0 0 0 19 9z"/>
+      <circle cx="9" cy="9" r="1" fill="currentColor"/>
+    </svg>
+  )
+}
+function StarIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    </svg>
+  )
+}
+function GearIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
   )
 }

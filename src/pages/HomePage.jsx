@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import Mascot from '../components/Mascot'
 import { useTransactions } from '../hooks/useTransactions'
 import { usePockets } from '../hooks/usePockets'
 import { useWishlist } from '../hooks/useWishlist'
@@ -17,16 +16,16 @@ export default function HomePage() {
   const todayStr = today.toISOString().split('T')[0]
   const isWFH    = profile ? isWfhDay(today, profile.wfh_days) : false
 
-  const jajanPocket    = getPocketByName('jajan')
-  const tabunganPocket = getPocketByName('tabungan')
-  const wishlistPocket = getPocketByName('wishlist')
+  const jp = getPocketByName('jajan')
+  const tp = getPocketByName('tabungan')
+  const wp = getPocketByName('wishlist')
 
-  const todayExpense = useMemo(() =>
-    transactions.filter((t) => t.type === 'expense' && t.date === todayStr).reduce((s,t)=>s+t.amount,0),
+  const todayOut = useMemo(() =>
+    transactions.filter((t) => t.type === 'expense' && t.date === todayStr).reduce((s, t) => s + t.amount, 0),
     [transactions, todayStr])
 
-  const todayIncome = useMemo(() =>
-    transactions.filter((t) => t.type === 'income' && t.date === todayStr).reduce((s,t)=>s+t.amount,0),
+  const todayIn = useMemo(() =>
+    transactions.filter((t) => t.type === 'income' && t.date === todayStr).reduce((s, t) => s + t.amount, 0),
     [transactions, todayStr])
 
   const dailyNeed = useMemo(() => {
@@ -35,98 +34,106 @@ export default function HomePage() {
     return tr + (profile.lunch_amount || 15000) + (profile.dinner_amount || 20000)
   }, [profile, isWFH])
 
-  // Grafik minggu
   const weekDates  = getWeekDates(today)
   const weeklyData = useMemo(() =>
     weekDates.map((d) => {
       const ds    = d.toISOString().split('T')[0]
-      const total = transactions.filter((t) => t.type === 'expense' && t.date === ds).reduce((s,t)=>s+t.amount,0)
+      const total = transactions.filter((t) => t.type === 'expense' && t.date === ds).reduce((s, t) => s + t.amount, 0)
       return { ds, total, label: ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][d.getDay()] }
     }), [transactions, weekDates])
   const maxW = Math.max(...weeklyData.map((d) => d.total), 1)
 
-  const mood = useMemo(() => {
-    if (todayExpense === 0) return 'neutral'
-    if (todayExpense > dailyNeed * 1.4) return 'sad'
-    if (todayExpense <= dailyNeed * 0.6) return 'happy'
-    return 'neutral'
-  }, [todayExpense, dailyNeed])
+  const topWL = wishlist.filter((w) => !w.is_completed).sort((a, b) => a.priority - b.priority)[0]
 
-  const topWishlist = wishlist.filter((w) => !w.is_completed).sort((a,b)=>a.priority-b.priority)[0]
+  const h = today.getHours()
+  const greeting = h < 11 ? 'Selamat pagi ☀️' : h < 15 ? 'Selamat siang 🌤' : h < 18 ? 'Selamat sore 🌅' : 'Selamat malam 🌙'
 
   return (
     <div className="page">
-
       {/* Header */}
       <div className="home-header">
-        <div className="home-header__left">
-          <h1>
-            {getGreeting()} 👋
-          </h1>
+        <div>
+          <p className="home-header__greeting">{greeting}</p>
+          <h1 className="home-header__name">duit.ku</h1>
           <p className="home-header__date">
-            {today.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})}
-            {isWFH && <span className="badge-wfh">WFH</span>}
+            {today.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {isWFH && <span className="wfh-badge">WFH</span>}
           </p>
         </div>
-        <Mascot mood={mood} size={52} />
+        <Link to="/transaksi" style={{ flexShrink: 0 }}>
+          <div style={{
+            width: 42, height: 42,
+            background: 'var(--grad-main)',
+            borderRadius: '14px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 16px rgba(167,139,250,0.4)',
+            fontSize: '1.2rem'
+          }}>+</div>
+        </Link>
       </div>
 
-      {/* Hero card */}
+      {/* Hero */}
       <div className="hero-card">
         <div className="hero-card__top">
           <div>
-            <p className="hero-card__label">Sisa uang jajan</p>
-            <p className="hero-card__amount">{formatRupiah(jajanPocket?.balance || 0)}</p>
+            <p className="hero-card__label">Uang Jajan</p>
+            <p className="hero-card__amount">{formatRupiah(jp?.balance || 0)}</p>
           </div>
-          <Link to="/transaksi" className="btn btn--white btn--sm">+ Catat</Link>
+          <Link to="/tabungan" className="btn btn--ghost btn--sm" style={{ position: 'relative', zIndex: 1 }}>
+            Atur
+          </Link>
         </div>
         <div className="hero-card__stats">
           <div className="hero-stat">
             <p className="hero-stat__label">Keluar hari ini</p>
-            <p className="hero-stat__val">{formatRupiah(todayExpense)}</p>
+            <p className="hero-stat__val">{formatRupiah(todayOut)}</p>
           </div>
           <div className="hero-stat">
-            <p className="hero-stat__label">Estimasi harian</p>
+            <p className="hero-stat__label">Budget harian</p>
             <p className="hero-stat__val">{formatRupiah(dailyNeed)}</p>
           </div>
           <div className="hero-stat">
             <p className="hero-stat__label">Masuk hari ini</p>
-            <p className="hero-stat__val">+{formatRupiah(todayIncome)}</p>
+            <p className="hero-stat__val" style={{ color: 'rgba(255,255,255,.9)' }}>
+              {todayIn > 0 ? `+${formatRupiah(todayIn)}` : '-'}
+            </p>
           </div>
         </div>
-        {todayExpense > dailyNeed && (
-          <p className="hero-card__warn">⚠️ Pengeluaran melewati estimasi harian!</p>
+        {todayOut > dailyNeed && (
+          <p className="hero-card__warn">⚠️ Pengeluaran hari ini melebihi estimasi harian</p>
         )}
       </div>
 
-      {/* Pocket grid */}
-      <div className="pocket-grid" style={{ marginTop:'12px' }}>
-        {[
-          { icon:'🍜', label:'Uang Jajan', val: jajanPocket?.balance||0, cls:'peach', to:'/tabungan' },
-          { icon:'🏦', label:'Tabungan',   val: tabunganPocket?.balance||0, cls:'mint',  to:'/tabungan' },
-          { icon:'✨', label:'Wishlist',   val: wishlistPocket?.balance||0, cls:'lav',   to:'/wishlist' },
-        ].map(({ icon, label, val, cls, to }) => (
-          <Link key={label} to={to} className={`pocket-tile pocket-tile--${cls}`}>
-            <span className="pocket-tile__icon">{icon}</span>
-            <span className="pocket-tile__label">{label}</span>
-            <span className="pocket-tile__val">{formatRupiah(val)}</span>
-          </Link>
-        ))}
-      </div>
+      <div className="page__content" style={{ marginTop: 14 }}>
 
-      <div className="page__content" style={{ paddingTop:'12px' }}>
+        {/* Pocket tiles */}
+        <div className="pocket-row">
+          {[
+            { label: 'Tabungan', val: tp?.balance || 0, color: '#34d399', to: '/tabungan' },
+            { label: 'Wishlist', val: wp?.balance || 0, color: '#a78bfa', to: '/wishlist' },
+            { label: 'Hari ini', val: todayOut, color: '#fb923c', to: '/transaksi', neg: true },
+          ].map(({ label, val, color, to, neg }) => (
+            <Link key={label} to={to} className="pocket-tile" style={{ textDecoration: 'none' }}>
+              <div className="pocket-tile__dot" style={{ background: color }} />
+              <p className="pocket-tile__label">{label}</p>
+              <p className="pocket-tile__val" style={{ color: neg && val > 0 ? 'var(--danger)' : 'inherit' }}>
+                {neg && val > 0 ? '-' : ''}{formatRupiah(val)}
+              </p>
+            </Link>
+          ))}
+        </div>
 
-        {/* Grafik minggu ini */}
-        <div className="card">
-          <p className="section-title" style={{marginBottom:'2px'}}>Pengeluaran minggu ini 📊</p>
+        {/* Grafik */}
+        <div className="glass" style={{ padding: '16px' }}>
+          <p className="section-label">Minggu ini</p>
           <div className="week-chart">
-            {weeklyData.map((d,i) => {
-              const isToday = d.ds === todayStr
-              const h = (d.total / maxW) * 100
+            {weeklyData.map((d, i) => {
+              const isToday  = d.ds === todayStr
+              const h        = (d.total / maxW) * 100
               return (
-                <div key={i} className={`week-chart__col ${isToday?'week-chart__col--today':''}`}>
-                  {d.total > 0 && <span className="week-chart__val">{formatRupiah(d.total,true)}</span>}
-                  <div className="week-chart__bar" style={{height:`${Math.max(h,d.total>0?6:0)}%`}} />
+                <div key={i} className={`week-chart__col ${isToday ? 'week-chart__col--today' : ''}`}>
+                  {d.total > 0 && <span className="week-chart__val">{formatRupiah(d.total, true)}</span>}
+                  <div className="week-chart__bar" style={{ height: `${Math.max(h, d.total > 0 ? 6 : 0)}%` }} />
                   <span className="week-chart__label">{d.label}</span>
                 </div>
               )
@@ -135,43 +142,34 @@ export default function HomePage() {
         </div>
 
         {/* Wishlist teratas */}
-        {topWishlist && (
-          <Link to="/wishlist" className="wishlist-snap">
-            <p className="wishlist-snap__label">Wishlist teratas ✨</p>
-            <div className="wishlist-snap__row">
-              <span className="wishlist-snap__name">{topWishlist.name}</span>
-              <span className="wishlist-snap__pct">{Math.round((topWishlist.saved_amount/topWishlist.price)*100)}%</span>
+        {topWL && (
+          <Link to="/wishlist" className="glass" style={{ display: 'block', padding: '16px' }}>
+            <p className="section-label">Wishlist teratas</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <p style={{ fontWeight: 700, fontSize: '0.95rem' }}>{topWL.name}</p>
+              <p style={{ fontFamily: 'var(--ff)', fontWeight: 800, color: 'var(--accent)', fontSize: '1rem' }}>
+                {Math.round((topWL.saved_amount / topWL.price) * 100)}%
+              </p>
             </div>
-            <div className="progress-bar">
-              <div className="progress-bar__fill progress-bar__fill--wishlist"
-                style={{width:`${Math.min((topWishlist.saved_amount/topWishlist.price)*100,100)}%`}} />
+            <div className="progress-track">
+              <div className="progress-fill"
+                style={{ width: `${Math.min((topWL.saved_amount / topWL.price) * 100, 100)}%` }} />
             </div>
-            <p className="wishlist-snap__sub">
-              {formatRupiah(topWishlist.saved_amount)} terkumpul dari {formatRupiah(topWishlist.price)}
-              {' · kurang '}<strong>{formatRupiah(topWishlist.price-topWishlist.saved_amount)}</strong>
+            <p style={{ fontSize: '0.73rem', color: 'var(--text-3)', marginTop: 8 }}>
+              {formatRupiah(topWL.saved_amount)} terkumpul · kurang <span style={{ color: 'var(--danger)', fontWeight: 700 }}>{formatRupiah(topWL.price - topWL.saved_amount)}</span>
             </p>
           </Link>
         )}
 
-        {/* Empty state */}
         {transactions.length === 0 && (
           <div className="empty-state">
-            <span className="empty-state__emoji">🥚</span>
-            <p>Belum ada catatan nih~</p>
-            <p>Yuk mulai catat keuanganmu!</p>
-            <Link to="/transaksi" className="btn btn--primary mt-sm">+ Catat sekarang</Link>
+            <div className="empty-state__icon">💸</div>
+            <p>Belum ada catatan</p>
+            <p>Catat pemasukan dulu yuk!</p>
+            <Link to="/transaksi" className="btn btn--primary mt-8">Catat sekarang</Link>
           </div>
         )}
-
       </div>
     </div>
   )
-}
-
-function getGreeting() {
-  const h = new Date().getHours()
-  if (h < 11) return 'Pagi!'
-  if (h < 15) return 'Siang!'
-  if (h < 18) return 'Sore!'
-  return 'Malam!'
 }
