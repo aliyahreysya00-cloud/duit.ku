@@ -13,7 +13,7 @@ export default function PocketsPage() {
   const { wishlist } = useWishlist()
   const toast = useToast()
 
-  const [editP, setEditP]     = useState(null)
+  const [editP, setEditP]     = useState(null)  // menyimpan key string: 'jajan'|'tabungan'|'wishlist'
   const [editAmt, setEditAmt] = useState('')
   const [busy, setBusy]       = useState(false)
   const [showTr, setShowTr]   = useState(false)
@@ -82,9 +82,10 @@ export default function PocketsPage() {
   const totalKurang = activeWL.reduce((s, w) => s + Math.max(0, w.price - w.saved_amount), 0)
 
   // ── Handlers ─────────────────────────────────────────────
-  async function saveEdit(p) {
+  async function saveEdit(key, p) {
+    if (!p) { toast('Pocket tidak ditemukan', 'error'); return }
     const v = parseInt(editAmt)
-    if (isNaN(v) || v < 0) return
+    if (isNaN(v) || v < 0) { toast('Nominal tidak valid', 'error'); return }
     setBusy(true)
     const { error } = await updatePocketBalance(p.id, v)
     setBusy(false)
@@ -157,23 +158,26 @@ export default function PocketsPage() {
               <span className="p-card__icon">{icon}</span>
               <span className="p-card__label">{label}</span>
 
-              {editP === p?.id ? (
+              {editP === key ? (
                 <div style={{ width: '100%' }}>
                   <input
                     type="number" className="form-input form-input--sm"
                     value={editAmt} onChange={(e) => setEditAmt(e.target.value)}
                     placeholder="0" inputMode="numeric" autoFocus
                     style={{ marginBottom: 6 }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveEdit(key, p) } }}
                   />
                   <div style={{ display: 'flex', gap: 4 }}>
-                    <button className="btn btn--primary btn--xs" disabled={busy} onClick={() => saveEdit(p)}>✓</button>
+                    <button className="btn btn--primary btn--xs" disabled={busy} onClick={() => saveEdit(key, p)}>
+                      {busy ? '...' : '✓'}
+                    </button>
                     <button className="btn btn--ghost btn--xs" onClick={() => { setEditP(null); setEditAmt('') }}>✕</button>
                   </div>
                 </div>
               ) : (
                 <>
                   <span className="p-card__val">{formatRupiah(p?.balance || 0)}</span>
-                  <button className="p-card__edit" onClick={() => { setEditP(p?.id); setEditAmt(String(p?.balance || 0)) }}>
+                  <button className="p-card__edit" onClick={() => { setEditP(key); setEditAmt(String(p?.balance || 0)) }}>
                     ✏️ edit
                   </button>
                 </>
