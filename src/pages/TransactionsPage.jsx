@@ -3,7 +3,7 @@ import { useTransactions } from '../hooks/useTransactions'
 import { usePockets } from '../hooks/usePockets'
 import { useProfile } from '../hooks/useProfile'
 import { useToast } from '../components/Toast'
-import { formatRupiah, isWfhDay } from '../lib/utils'
+import { formatRupiah, isWfhDay, getLocalDateStr } from '../lib/utils'
 import { supabase } from '../lib/supabase'
 
 const EXP_CATS = [
@@ -35,7 +35,7 @@ export default function TransactionsPage() {
   const toast = useToast()
 
   const today    = new Date()
-  const todayStr = today.toISOString().split('T')[0]
+  const todayStr = getLocalDateStr(today)
   const isWFH    = profile ? isWfhDay(today, profile.wfh_days) : false
 
   const [tab,    setTab]    = useState('expense')
@@ -117,7 +117,7 @@ export default function TransactionsPage() {
   const filteredTx = useMemo(() => {
     const ws = new Date(today)
     ws.setDate(today.getDate() - today.getDay())
-    const wsStr = ws.toISOString().split('T')[0]
+    const wsStr = getLocalDateStr(ws)
     return transactions.filter((t) => {
       if (filter === 'hari_ini')   return t.date === todayStr
       if (filter === 'minggu_ini') return t.date >= wsStr

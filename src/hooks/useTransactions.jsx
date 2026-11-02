@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { cacheGet, cacheSet } from '../lib/localStorage'
 import { useAuth } from './useAuth'
+import { getLocalDateStr } from '../lib/utils'
 
 const CACHE_KEY = 'transactions'
 
@@ -40,7 +41,7 @@ export function useTransactions() {
     const newTx = {
       ...tx,
       user_id: user.id,
-      date: tx.date || new Date().toISOString().split('T')[0],
+      date: tx.date || getLocalDateStr(),
     }
     // optimistic
     const tempId = 'temp_' + Date.now()

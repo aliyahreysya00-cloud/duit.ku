@@ -4,7 +4,7 @@ import { useTransactions } from '../hooks/useTransactions'
 import { useProfile } from '../hooks/useProfile'
 import { useWishlist } from '../hooks/useWishlist'
 import { useToast } from '../components/Toast'
-import { formatRupiah, isWfhDay, getWeekDates } from '../lib/utils'
+import { formatRupiah, isWfhDay, getWeekDates, getLocalDateStr } from '../lib/utils'
 
 export default function PocketsPage() {
   const { updatePocketBalance, transferBetweenPockets, getPocketByName } = usePockets()
@@ -22,10 +22,10 @@ export default function PocketsPage() {
   const [prev, setPrev]       = useState({ tabungan: '', wishlist: '' })
 
   const today     = new Date()
-  const todayStr  = today.toISOString().split('T')[0]
+  const todayStr  = getLocalDateStr(today)
   const weekDates = getWeekDates(today)
-  const weekStart = weekDates[0].toISOString().split('T')[0]
-  const weekEnd   = weekDates[6].toISOString().split('T')[0]
+  const weekStart = getLocalDateStr(weekDates[0])
+  const weekEnd   = getLocalDateStr(weekDates[6])
 
   const jp = getPocketByName('jajan')
   const tp = getPocketByName('tabungan')
@@ -37,7 +37,7 @@ export default function PocketsPage() {
     const { transport_amount: ta = 14000, lunch_amount: la = 15000, dinner_amount: da = 20000, wfh_days: wfhd = [3] } = profile
     const workDays = weekDates.filter((d) => d.getDay() >= 1 && d.getDay() <= 5)
     const days = workDays.map((d) => {
-      const ds  = d.toISOString().split('T')[0]
+      const ds  = getLocalDateStr(d)
       const wfh = isWfhDay(d, wfhd)
       return {
         label:   ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][d.getDay()],

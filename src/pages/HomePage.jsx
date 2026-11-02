@@ -1,19 +1,36 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTransactions } from '../hooks/useTransactions'
 import { usePockets } from '../hooks/usePockets'
 import { useWishlist } from '../hooks/useWishlist'
 import { useProfile } from '../hooks/useProfile'
-import { formatRupiah, getWeekDates, isWfhDay } from '../lib/utils'
+import { formatRupiah, getWeekDates, isWfhDay, getLocalDateStr } from '../lib/utils'
+import DonutChart from '../components/DonutChart'
+
+const CAT_COLOR = {
+  transport:   '#60a5fa',
+  makan_siang: '#34d399',
+  makan_malam: '#a78bfa',
+  jajan:       '#f472b6',
+  lainnya:     '#fb923c',
+}
+const CAT_LABEL = {
+  transport:   'Transport',
+  makan_siang: 'Makan Siang',
+  makan_malam: 'Makan Malam',
+  jajan:       'Jajan',
+  lainnya:     'Lainnya',
+}
 
 export default function HomePage() {
   const { transactions } = useTransactions()
   const { getPocketByName } = usePockets()
   const { wishlist } = useWishlist()
   const { profile } = useProfile()
+  const [chartPeriod, setChartPeriod] = useState('minggu') // 'minggu' | 'bulan'
 
   const today    = new Date()
-  const todayStr = today.toISOString().split('T')[0]
+  const todayStr = getLocalDateStr(today)
   const isWFH    = profile ? isWfhDay(today, profile.wfh_days) : false
 
   const jp = getPocketByName('jajan')
@@ -34,17 +51,57 @@ export default function HomePage() {
     return tr + (profile.lunch_amount || 15000) + (profile.dinner_amount || 20000)
   }, [profile, isWFH])
 
+  // ── Grafik bar minggu ini ─────────────────────────────────
   const weekDates  = getWeekDates(today)
   const weeklyData = useMemo(() =>
     weekDates.map((d) => {
-      const ds    = d.toISOString().split('T')[0]
-      const total = transactions
-        .filter((t) => t.type === 'expense' && t.date === ds)
-        .reduce((s, t) => s + t.amount, 0)
+      const ds    = getLocalDateStr(d)
+      const total = transactions.filter((t) => t.type === 'expense' && t.date === ds).reduce((s, t) => s + t.amount, 0)
       return { ds, total, label: ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][d.getDay()] }
     }), [transactions, weekDates])
   const maxW = Math.max(...weeklyData.map((d) => d.total), 1)
 
+  // ── Donut chart data ──────────────────────────────────────
+  const donutData = useMemo(() => {
+    const now    = new Date()
+    let startStr, endStr
+
+    if (chartPeriod === 'minggu') {
+      const wd = getWeekDates(now)
+      startStr = getLocalDateStr(wd[0])
+      endStr   = getLocalDateStr(wd[6])
+    } else {
+      // bulan ini
+      const y = now.getFullYear(), m = now.getMonth()
+      startStr = getLocalDateStr(new Date(y, m, 1))
+      endStr   = getLocalDateStr(new Date(y, m + 1, 0))
+    }
+
+    const expenses = transactions.filter(
+      (t) => t.type === 'expense' && t.date >= startStr && t.date <= endStr
+    )
+
+    const totalAmt = expenses.reduce((s, t) => s + t.amount, 0)
+
+    // Group by category
+    const grouped = {}
+    for (const t of expenses) {
+      grouped[t.category] = (grouped[t.category] || 0) + t.amount
+    }
+
+    return Object.entries(grouped)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat, val]) => ({
+        label:          CAT_LABEL[cat] || cat,
+        value:          val,
+        color:          CAT_COLOR[cat] || '#94a3b8',
+        formattedValue: formatRupiah(val, true),
+      }))
+  }, [transactions, chartPeriod])
+
+  const donutTotal = donutData.reduce((s, d) => s + d.value, 0)
+
+  // ── Wishlist teratas ──────────────────────────────────────
   const topWL = wishlist.filter((w) => !w.is_completed).sort((a, b) => a.priority - b.priority)[0]
 
   const h = today.getHours()
@@ -127,7 +184,7 @@ export default function HomePage() {
           ))}
         </div>
 
-        {/* ── Grafik minggu ini ── */}
+        {/* ── Grafik bar minggu ini ── */}
         <div className="card">
           <p className="s-label">Pengeluaran minggu ini</p>
           <div className="week-chart">
@@ -143,6 +200,43 @@ export default function HomePage() {
               )
             })}
           </div>
+        </div>
+
+        {/* ── Donut chart pengeluaran per kategori ── */}
+        <div className="card">
+          {/* Header + filter */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <p className="s-title">Pengeluaran per Kategori</p>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {['minggu', 'bulan'].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setChartPeriod(p)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 99,
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    background: chartPeriod === p ? 'var(--gv)' : 'rgba(255,255,255,.08)',
+                    color: 'white',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'background .15s',
+                    fontFamily: 'var(--ff)',
+                  }}
+                >
+                  {p === 'minggu' ? 'Minggu ini' : 'Bulan ini'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <DonutChart
+            data={donutData}
+            size={160}
+            centerLabel="Total"
+            centerValue={formatRupiah(donutTotal, true)}
+          />
         </div>
 
         {/* ── Wishlist teratas ── */}
