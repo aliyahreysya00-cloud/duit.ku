@@ -1,296 +1,331 @@
 import { useState, useMemo } from 'react'
 import { useTransactions } from '../hooks/useTransactions'
+import { usePockets } from '../hooks/usePockets'
 import { useProfile } from '../hooks/useProfile'
 import { useToast } from '../components/Toast'
 import { formatRupiah, isWfhDay } from '../lib/utils'
 
-const CATEGORIES = [
-  { value: 'transport',    label: '🚌 Transport'    },
-  { value: 'makan_siang',  label: '🍱 Makan Siang'  },
-  { value: 'makan_malam',  label: '🍜 Makan Malam'  },
-  { value: 'jajan',        label: '🧋 Jajan'         },
-  { value: 'lainnya',      label: '📦 Lainnya'       },
-]
-
-const INCOME_CATEGORIES = [
-  { value: 'uang_saku',   label: '💰 Uang Saku'   },
-  { value: 'gaji_magang', label: '💼 Gaji Magang'  },
+const EXPENSE_CATS = [
+  { value: 'transport',   label: '🚌 Transport'   },
+  { value: 'makan_siang', label: '🍱 Makan Siang' },
+  { value: 'makan_malam', label: '🍜 Makan Malam' },
+  { value: 'jajan',       label: '🧋 Jajan'        },
   { value: 'lainnya',     label: '📦 Lainnya'      },
 ]
+const INCOME_CATS = [
+  { value: 'uang_saku',   label: '💰 Uang Saku'  },
+  { value: 'gaji_magang', label: '💼 Gaji Magang' },
+  { value: 'lainnya',     label: '📦 Lainnya'     },
+]
+
+function getCatIcon(cat) {
+  return { transport:'🚌', makan_siang:'🍱', makan_malam:'🍜', jajan:'🧋', lainnya:'📦', uang_saku:'💰', gaji_magang:'💼' }[cat] ?? '📦'
+}
+function getCatLabel(cat) {
+  return { transport:'Transport', makan_siang:'Makan Siang', makan_malam:'Makan Malam', jajan:'Jajan', lainnya:'Lainnya', uang_saku:'Uang Saku', gaji_magang:'Gaji Magang' }[cat] ?? cat
+}
 
 export default function TransactionsPage() {
   const { transactions, addTransaction, deleteTransaction } = useTransactions()
+  const { getPocketByName, updatePocketBalance } = usePockets()
   const { profile } = useProfile()
   const toast = useToast()
 
-  const today = new Date()
-  const isWFH = profile ? isWfhDay(today, profile.wfh_days) : false
+  const today    = new Date()
   const todayStr = today.toISOString().split('T')[0]
+  const isWFH    = profile ? isWfhDay(today, profile.wfh_days) : false
 
-  const [tab, setTab] = useState('expense') // 'expense' | 'income'
-  const [form, setForm] = useState({
-    amount: '',
-    category: 'makan_siang',
-    note: '',
-    date: todayStr,
-  })
-  const [incomeForm, setIncomeForm] = useState({
-    amount: '',
-    category: 'uang_saku',
-    note: '',
-    date: todayStr,
-  })
+  const [tab, setTab] = useState('expense')
+  const [expForm, setExpForm] = useState({ amount: '', category: 'makan_siang', note: '', date: todayStr })
+  const [incForm, setIncForm] = useState({ amount: '', category: 'uang_saku',   note: '', date: todayStr })
   const [submitting, setSubmitting] = useState(false)
-  const [filter, setFilter] = useState('semua') // 'semua' | 'hari_ini' | 'minggu_ini'
+  const [filter, setFilter] = useState('semua')
+  const [editTx, setEditTx] = useState(null) // { id, amount, category, note, date, type }
+  const [editSubmitting, setEditSubmitting] = useState(false)
 
-  // Cek apakah transport hari ini sudah dicatat
+  // Apakah transport hari ini sudah dicatat
   const transportToday = useMemo(() =>
-    transactions.some(
-      (t) => t.type === 'expense' && t.category === 'transport' && t.date === todayStr
-    ),
-    [transactions, todayStr]
-  )
+    transactions.some((t) => t.type === 'expense' && t.category === 'transport' && t.date === todayStr),
+    [transactions, todayStr])
 
-  function handleTransportQuick() {
-    if (isWFH) return
-    const amount = profile?.transport_amount || 14000
-    setForm((f) => ({ ...f, amount: String(amount), category: 'transport', date: todayStr }))
-    setTab('expense')
-  }
-
+  // ── Submit Pengeluaran ────────────────────────────────────
   async function handleExpenseSubmit(e) {
     e.preventDefault()
-    if (!form.amount || isNaN(Number(form.amount))) return
+    const amount = parseInt(expForm.amount)
+    if (!amount || amount <= 0) return
     setSubmitting(true)
+
+    const jajanPocket = getPocketByName('jajan')
     const { error } = await addTransaction({
-      type: 'expense',
-      amount: parseInt(form.amount),
-      category: form.category,
-      note: form.note,
-      date: form.date,
+      type: 'expense', amount, category: expForm.category, note: expForm.note, date: expForm.date,
     })
-    setSubmitting(false)
-    if (error) {
-      toast('Aduh, gagal nyimpen 😢 ' + error, 'error')
-    } else {
-      toast('Pengeluaran tercatat! 📝', 'success')
-      setForm({ amount: '', category: 'makan_siang', note: '', date: todayStr })
+    if (error) { toast('Gagal menyimpan 😢', 'error'); setSubmitting(false); return }
+
+    // Kurangi saldo jajan otomatis
+    if (jajanPocket) {
+      await updatePocketBalance(jajanPocket.id, jajanPocket.balance - amount)
     }
+
+    setSubmitting(false)
+    toast('Pengeluaran dicatat & saldo diupdate 📝', 'success')
+    setExpForm({ amount: '', category: 'makan_siang', note: '', date: todayStr })
   }
 
+  // ── Submit Pemasukan ──────────────────────────────────────
   async function handleIncomeSubmit(e) {
     e.preventDefault()
-    if (!incomeForm.amount || isNaN(Number(incomeForm.amount))) return
+    const amount = parseInt(incForm.amount)
+    if (!amount || amount <= 0) return
     setSubmitting(true)
+
+    const jajanPocket = getPocketByName('jajan')
     const { error } = await addTransaction({
-      type: 'income',
-      amount: parseInt(incomeForm.amount),
-      category: incomeForm.category,
-      note: incomeForm.note,
-      date: incomeForm.date,
+      type: 'income', amount, category: incForm.category, note: incForm.note, date: incForm.date,
     })
-    setSubmitting(false)
-    if (error) {
-      toast('Aduh, gagal nyimpen 😢 ' + error, 'error')
-    } else {
-      toast('Uang masuk tercatat! 🎉', 'success')
-      setIncomeForm({ amount: '', category: 'uang_saku', note: '', date: todayStr })
+    if (error) { toast('Gagal menyimpan 😢', 'error'); setSubmitting(false); return }
+
+    // Tambah saldo jajan otomatis
+    if (jajanPocket) {
+      await updatePocketBalance(jajanPocket.id, jajanPocket.balance + amount)
     }
+
+    setSubmitting(false)
+    toast(`+${formatRupiah(amount)} masuk ke Uang Jajan 🎉`, 'success')
+    setIncForm({ amount: '', category: 'uang_saku', note: '', date: todayStr })
   }
 
-  async function handleDelete(id) {
-    const { error } = await deleteTransaction(id)
-    if (error) toast('Gagal hapus 😢', 'error')
-    else toast('Transaksi dihapus', 'info')
+  // ── Edit Transaksi ────────────────────────────────────────
+  async function handleEditSubmit(e) {
+    e.preventDefault()
+    if (!editTx) return
+    const newAmount = parseInt(editTx.amount)
+    if (!newAmount || newAmount <= 0) return
+
+    const original = transactions.find((t) => t.id === editTx.id)
+    if (!original) return
+    setEditSubmitting(true)
+
+    const jajanPocket = getPocketByName('jajan')
+    const diff = newAmount - original.amount // positif = lebih besar dari sebelumnya
+
+    // Update transaksi di Supabase
+    const { error } = await import('../lib/supabase').then(({ supabase }) =>
+      supabase.from('transactions')
+        .update({ amount: newAmount, category: editTx.category, note: editTx.note, date: editTx.date })
+        .eq('id', editTx.id)
+    )
+    if (error) { toast('Gagal edit 😢', 'error'); setEditSubmitting(false); return }
+
+    // Sesuaikan saldo pocket
+    if (jajanPocket && diff !== 0) {
+      const delta = original.type === 'expense' ? -diff : diff
+      await updatePocketBalance(jajanPocket.id, jajanPocket.balance + delta)
+    }
+
+    // Refresh transactions
+    const { useTransactions: _ } = await import('../hooks/useTransactions')
+    setEditSubmitting(false)
+    setEditTx(null)
+    toast('Transaksi diupdate ✅', 'success')
+    // Force re-fetch dengan reload ringan
+    window.dispatchEvent(new Event('duitku:refresh'))
   }
 
-  // Filter transaksi
+  // ── Hapus Transaksi ───────────────────────────────────────
+  async function handleDelete(tx) {
+    if (!window.confirm(`Hapus transaksi ${getCatLabel(tx.category)} ${formatRupiah(tx.amount)}?`)) return
+    const jajanPocket = getPocketByName('jajan')
+    const { error } = await deleteTransaction(tx.id)
+    if (error) { toast('Gagal hapus 😢', 'error'); return }
+
+    // Rollback saldo
+    if (jajanPocket) {
+      const delta = tx.type === 'expense' ? tx.amount : -tx.amount
+      await updatePocketBalance(jajanPocket.id, jajanPocket.balance + delta)
+    }
+    toast('Transaksi dihapus', 'info')
+  }
+
+  // ── Filter ────────────────────────────────────────────────
   const filteredTx = useMemo(() => {
     const weekStart = new Date(today)
     weekStart.setDate(today.getDate() - today.getDay())
     const weekStartStr = weekStart.toISOString().split('T')[0]
-
     return transactions.filter((t) => {
-      if (filter === 'hari_ini') return t.date === todayStr
+      if (filter === 'hari_ini')   return t.date === todayStr
       if (filter === 'minggu_ini') return t.date >= weekStartStr
       return true
     })
   }, [transactions, filter, todayStr])
 
+  const todayIncome  = useMemo(() => transactions.filter((t) => t.type === 'income'  && t.date === todayStr).reduce((s,t)=>s+t.amount,0), [transactions, todayStr])
+  const todayExpense = useMemo(() => transactions.filter((t) => t.type === 'expense' && t.date === todayStr).reduce((s,t)=>s+t.amount,0), [transactions, todayStr])
+
   return (
     <div className="page">
       <header className="page__header">
-        <h1 className="page__title">Catat Transaksi 💸</h1>
+        <h1 className="page__title">Catat 💸</h1>
       </header>
 
       <main className="page__content">
-        {/* Tombol cepat transport */}
-        <div className="quick-actions">
-          <button
-            className={`btn ${isWFH || transportToday ? 'btn--ghost btn--disabled' : 'btn--accent'}`}
-            onClick={handleTransportQuick}
-            disabled={isWFH || transportToday}
-            title={isWFH ? 'WFH hari ini, ga perlu transport 🏠' : transportToday ? 'Transport hari ini sudah dicatat ✅' : undefined}
-          >
-            🚌 Transport hari ini
-            {isWFH && <span style={{ marginLeft: '0.4rem', fontSize: '0.75rem' }}>(WFH)</span>}
-            {transportToday && !isWFH && <span style={{ marginLeft: '0.4rem', fontSize: '0.75rem' }}>✅</span>}
-          </button>
+        {/* Ringkasan hari ini */}
+        <div className="summary-row">
+          <div className="summary-pill summary-pill--income">
+            <span className="summary-pill__label">Masuk hari ini</span>
+            <span className="summary-pill__val">+{formatRupiah(todayIncome)}</span>
+          </div>
+          <div className="summary-pill summary-pill--expense">
+            <span className="summary-pill__label">Keluar hari ini</span>
+            <span className="summary-pill__val">-{formatRupiah(todayExpense)}</span>
+          </div>
         </div>
 
-        {/* Tab pengeluaran / pemasukan */}
-        <div className="tab-bar" role="tablist">
-          <button
-            role="tab"
-            aria-selected={tab === 'expense'}
-            className={`tab-bar__tab ${tab === 'expense' ? 'tab-bar__tab--active' : ''}`}
-            onClick={() => setTab('expense')}
-          >
-            💸 Pengeluaran
-          </button>
-          <button
-            role="tab"
-            aria-selected={tab === 'income'}
-            className={`tab-bar__tab ${tab === 'income' ? 'tab-bar__tab--active' : ''}`}
-            onClick={() => setTab('income')}
-          >
-            💰 Pemasukan
-          </button>
+        {/* Tombol transport cepat */}
+        <button
+          className={`transport-btn ${isWFH || transportToday ? 'transport-btn--off' : ''}`}
+          onClick={() => {
+            if (isWFH || transportToday) return
+            setExpForm((f) => ({ ...f, amount: String(profile?.transport_amount || 14000), category: 'transport', date: todayStr }))
+            setTab('expense')
+          }}
+          disabled={isWFH || transportToday}
+        >
+          🚌 Transport hari ini — {formatRupiah(profile?.transport_amount || 14000)}
+          {isWFH && <span className="transport-btn__note">WFH</span>}
+          {transportToday && !isWFH && <span className="transport-btn__note">✅ Dicatat</span>}
+        </button>
+
+        {/* Tab */}
+        <div className="tab-bar">
+          {[{ key:'expense', label:'💸 Pengeluaran' }, { key:'income', label:'💰 Pemasukan' }].map(({ key, label }) => (
+            <button key={key} className={`tab-bar__tab ${tab === key ? 'tab-bar__tab--active' : ''}`} onClick={() => setTab(key)}>
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* Form pengeluaran */}
+        {/* Form Pengeluaran */}
         {tab === 'expense' && (
-          <form className="card" onSubmit={handleExpenseSubmit}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="exp-amount">Nominal (Rp)</label>
-              <input
-                id="exp-amount"
-                type="number"
-                className="form-input form-input--large"
-                placeholder="0"
-                min="1"
-                value={form.amount}
-                onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                required
-                inputMode="numeric"
-              />
+          <form className="card form-card" onSubmit={handleExpenseSubmit}>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Nominal (Rp)</label>
+                <input type="number" className="form-input form-input--amount"
+                  placeholder="0" min="1" inputMode="numeric" required
+                  value={expForm.amount} onChange={(e) => setExpForm((f) => ({ ...f, amount: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Tanggal</label>
+                <input type="date" className="form-input" required
+                  value={expForm.date} onChange={(e) => setExpForm((f) => ({ ...f, date: e.target.value }))} />
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="exp-cat">Kategori</label>
-              <select
-                id="exp-cat"
-                className="form-select"
-                value={form.category}
-                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Kategori</label>
+                <select className="form-select" value={expForm.category}
+                  onChange={(e) => setExpForm((f) => ({ ...f, category: e.target.value }))}>
+                  {EXPENSE_CATS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Catatan</label>
+                <input type="text" className="form-input" placeholder="opsional"
+                  value={expForm.note} onChange={(e) => setExpForm((f) => ({ ...f, note: e.target.value }))} />
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="exp-note">Catatan (opsional)</label>
-              <input
-                id="exp-note"
-                type="text"
-                className="form-input"
-                placeholder="makan ayam geprek 🍗"
-                value={form.note}
-                onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="exp-date">Tanggal</label>
-              <input
-                id="exp-date"
-                type="date"
-                className="form-input"
-                value={form.date}
-                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                required
-              />
-            </div>
-            <button type="submit" className="btn btn--primary" disabled={submitting} style={{ width: '100%' }}>
-              {submitting ? 'Nyimpen...' : '📝 Catat Pengeluaran'}
+            <p className="form-hint">💡 Otomatis mengurangi saldo Uang Jajan</p>
+            <button type="submit" className="btn btn--primary btn--full" disabled={submitting}>
+              {submitting ? 'Menyimpan...' : '📝 Catat Pengeluaran'}
             </button>
           </form>
         )}
 
-        {/* Form pemasukan */}
+        {/* Form Pemasukan */}
         {tab === 'income' && (
-          <form className="card" onSubmit={handleIncomeSubmit}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="inc-amount">Nominal (Rp)</label>
-              <input
-                id="inc-amount"
-                type="number"
-                className="form-input form-input--large"
-                placeholder="0"
-                min="1"
-                value={incomeForm.amount}
-                onChange={(e) => setIncomeForm((f) => ({ ...f, amount: e.target.value }))}
-                required
-                inputMode="numeric"
-              />
+          <form className="card form-card" onSubmit={handleIncomeSubmit}>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Nominal (Rp)</label>
+                <input type="number" className="form-input form-input--amount"
+                  placeholder="0" min="1" inputMode="numeric" required
+                  value={incForm.amount} onChange={(e) => setIncForm((f) => ({ ...f, amount: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Tanggal</label>
+                <input type="date" className="form-input" required
+                  value={incForm.date} onChange={(e) => setIncForm((f) => ({ ...f, date: e.target.value }))} />
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="inc-cat">Kategori</label>
-              <select
-                id="inc-cat"
-                className="form-select"
-                value={incomeForm.category}
-                onChange={(e) => setIncomeForm((f) => ({ ...f, category: e.target.value }))}
-              >
-                {INCOME_CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Kategori</label>
+                <select className="form-select" value={incForm.category}
+                  onChange={(e) => setIncForm((f) => ({ ...f, category: e.target.value }))}>
+                  {INCOME_CATS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Catatan</label>
+                <input type="text" className="form-input" placeholder="opsional"
+                  value={incForm.note} onChange={(e) => setIncForm((f) => ({ ...f, note: e.target.value }))} />
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="inc-note">Catatan (opsional)</label>
-              <input
-                id="inc-note"
-                type="text"
-                className="form-input"
-                placeholder="uang saku minggu ini 💵"
-                value={incomeForm.note}
-                onChange={(e) => setIncomeForm((f) => ({ ...f, note: e.target.value }))}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="inc-date">Tanggal</label>
-              <input
-                id="inc-date"
-                type="date"
-                className="form-input"
-                value={incomeForm.date}
-                onChange={(e) => setIncomeForm((f) => ({ ...f, date: e.target.value }))}
-                required
-              />
-            </div>
-            <button type="submit" className="btn btn--success" disabled={submitting} style={{ width: '100%' }}>
-              {submitting ? 'Nyimpen...' : '💰 Catat Pemasukan'}
+            <p className="form-hint">💡 Otomatis menambah saldo Uang Jajan</p>
+            <button type="submit" className="btn btn--success btn--full" disabled={submitting}>
+              {submitting ? 'Menyimpan...' : '💰 Catat Pemasukan'}
             </button>
           </form>
         )}
 
-        {/* Riwayat transaksi */}
+        {/* Modal Edit */}
+        {editTx && (
+          <div className="modal-overlay" onClick={() => setEditTx(null)}>
+            <form className="modal-card" onClick={(e) => e.stopPropagation()} onSubmit={handleEditSubmit}>
+              <h3 className="modal-card__title">Edit Transaksi</h3>
+              <div className="form-group">
+                <label className="form-label">Nominal (Rp)</label>
+                <input type="number" className="form-input form-input--amount"
+                  min="1" inputMode="numeric" required
+                  value={editTx.amount} onChange={(e) => setEditTx((t) => ({ ...t, amount: e.target.value }))} />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Kategori</label>
+                  <select className="form-select" value={editTx.category}
+                    onChange={(e) => setEditTx((t) => ({ ...t, category: e.target.value }))}>
+                    {(editTx.type === 'income' ? INCOME_CATS : EXPENSE_CATS).map((c) =>
+                      <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Tanggal</label>
+                  <input type="date" className="form-input" required
+                    value={editTx.date} onChange={(e) => setEditTx((t) => ({ ...t, date: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Catatan</label>
+                <input type="text" className="form-input" value={editTx.note || ''}
+                  onChange={(e) => setEditTx((t) => ({ ...t, note: e.target.value }))} />
+              </div>
+              <div style={{ display:'flex', gap:'8px', marginTop:'4px' }}>
+                <button type="button" className="btn btn--ghost btn--full" onClick={() => setEditTx(null)}>Batal</button>
+                <button type="submit" className="btn btn--primary btn--full" disabled={editSubmitting}>
+                  {editSubmitting ? 'Menyimpan...' : 'Simpan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Riwayat */}
         <section className="section">
           <div className="section__header">
             <h2 className="section__title">Riwayat</h2>
-            <div className="filter-chips" role="group" aria-label="Filter transaksi">
-              {[
-                { key: 'semua', label: 'Semua' },
-                { key: 'hari_ini', label: 'Hari ini' },
-                { key: 'minggu_ini', label: 'Minggu ini' },
-              ].map((f) => (
-                <button
-                  key={f.key}
-                  className={`chip ${filter === f.key ? 'chip--active' : ''}`}
-                  onClick={() => setFilter(f.key)}
-                >
-                  {f.label}
-                </button>
+            <div className="filter-chips">
+              {[{ key:'semua',label:'Semua' },{ key:'hari_ini',label:'Hari ini' },{ key:'minggu_ini',label:'Minggu ini' }].map((f) => (
+                <button key={f.key} className={`chip ${filter===f.key?'chip--active':''}`} onClick={() => setFilter(f.key)}>{f.label}</button>
               ))}
             </div>
           </div>
@@ -304,26 +339,24 @@ export default function TransactionsPage() {
             <ul className="tx-list">
               {filteredTx.map((tx) => (
                 <li key={tx.id} className={`tx-item tx-item--${tx.type}`}>
-                  <span className="tx-item__icon">
-                    {tx.type === 'income' ? '💰' : getCategoryIcon(tx.category)}
-                  </span>
+                  <span className="tx-item__icon">{tx.type === 'income' ? '💰' : getCatIcon(tx.category)}</span>
                   <div className="tx-item__info">
-                    <span className="tx-item__note">{tx.note || getCategoryLabel(tx.category)}</span>
+                    <span className="tx-item__note">{tx.note || getCatLabel(tx.category)}</span>
                     <span className="tx-item__date">
-                      {new Date(tx.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                      {new Date(tx.date + 'T12:00:00').toLocaleDateString('id-ID', { day:'numeric', month:'short' })}
+                      {' · '}<span className="tx-item__cat">{getCatLabel(tx.category)}</span>
                     </span>
                   </div>
-                  <span className={`tx-item__amount ${tx.type === 'income' ? 'tx-item__amount--income' : ''}`}>
+                  <span className={`tx-item__amount ${tx.type==='income'?'tx-item__amount--income':''}`}>
                     {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
                   </span>
-                  <button
-                    className="tx-item__delete"
-                    onClick={() => handleDelete(tx.id)}
-                    aria-label="Hapus transaksi"
-                    title="Hapus"
-                  >
-                    ×
-                  </button>
+                  <div className="tx-item__actions">
+                    <button className="tx-item__action-btn tx-item__action-btn--edit"
+                      onClick={() => setEditTx({ id:tx.id, amount:String(tx.amount), category:tx.category, note:tx.note||'', date:tx.date, type:tx.type })}
+                      aria-label="Edit">✏️</button>
+                    <button className="tx-item__action-btn tx-item__action-btn--del"
+                      onClick={() => handleDelete(tx)} aria-label="Hapus">🗑</button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -332,20 +365,4 @@ export default function TransactionsPage() {
       </main>
     </div>
   )
-}
-
-function getCategoryIcon(cat) {
-  const icons = {
-    transport: '🚌', makan_siang: '🍱', makan_malam: '🍜',
-    jajan: '🧋', lainnya: '📦',
-  }
-  return icons[cat] || '📦'
-}
-
-function getCategoryLabel(cat) {
-  const labels = {
-    transport: 'Transport', makan_siang: 'Makan Siang', makan_malam: 'Makan Malam',
-    jajan: 'Jajan', lainnya: 'Lainnya', uang_saku: 'Uang Saku', gaji_magang: 'Gaji Magang',
-  }
-  return labels[cat] || cat
 }
