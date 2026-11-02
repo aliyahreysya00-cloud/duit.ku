@@ -286,52 +286,8 @@ export default function InsightsPage() {
           )}
         </div>
 
-        {/* ── Riwayat transaksi lengkap ── */}
-        <div className="card">
-          <p className="s-title" style={{ marginBottom: 12 }}>Semua Transaksi — {periodLabel}</p>
-          {periodTx.length === 0 ? (
-            <div className="empty-state" style={{ padding: '20px 0' }}>
-              <div className="empty-state__icon">🧾</div>
-              <p>Belum ada transaksi</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {periodTx.slice(0, 20).map((tx) => (
-                <div key={tx.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '9px 0',
-                  borderBottom: '1px solid rgba(255,255,255,.05)',
-                }}>
-                  <div style={{
-                    width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: tx.type === 'income' ? 'rgba(52,211,153,.15)' : 'rgba(167,139,250,.15)',
-                    fontSize: '0.9rem',
-                  }}>
-                    {tx.type === 'income' ? '💰' : ({ transport:'🚌',makan_siang:'🍱',makan_malam:'🍜',jajan:'🧋',lainnya:'📦' }[tx.category]||'📦')}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontWeight: 600, fontSize: '0.83rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {tx.note || CAT_LABEL[tx.category] || tx.category}
-                    </p>
-                    <p style={{ fontSize: '0.68rem', color: 'var(--t3)', marginTop: 1 }}>
-                      {new Date(tx.date + 'T12:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
-                      {' · '}{CAT_LABEL[tx.category] || tx.category}
-                    </p>
-                  </div>
-                  <span style={{ fontWeight: 700, fontSize: '0.86rem', color: tx.type === 'income' ? 'var(--green)' : 'var(--t1)', flexShrink: 0 }}>
-                    {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
-                  </span>
-                </div>
-              ))}
-              {periodTx.length > 20 && (
-                <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--t3)', paddingTop: 8 }}>
-                  + {periodTx.length - 20} transaksi lainnya. Lihat di halaman Catat.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+        {/* ── Riwayat transaksi — dikelompokkan per tanggal ── */}
+        <TxByDate transactions={periodTx} periodLabel={periodLabel} />
 
         {/* ── Link ke Pengaturan ── */}
         <div style={{ textAlign: 'center', paddingTop: 8 }}>
@@ -341,6 +297,128 @@ export default function InsightsPage() {
         </div>
 
       </div>
+    </div>
+  )
+}
+
+/* ── Komponen riwayat per tanggal ── */
+const CAT_ICON_MAP = { transport:'🚌', makan_siang:'🍱', makan_malam:'🍜', jajan:'🧋', lainnya:'📦' }
+
+function TxByDate({ transactions, periodLabel }) {
+  const [showAll, setShowAll] = useState(false)
+
+  // Grup per tanggal, urutan terbaru dulu
+  const grouped = useMemo(() => {
+    const map = {}
+    for (const tx of [...transactions].sort((a, b) => b.date.localeCompare(a.date))) {
+      if (!map[tx.date]) map[tx.date] = []
+      map[tx.date].push(tx)
+    }
+    return Object.entries(map) // [['2026-11-02', [...tx]], ...]
+  }, [transactions])
+
+  const visibleGroups = showAll ? grouped : grouped.slice(0, 3)
+
+  if (transactions.length === 0) {
+    return (
+      <div className="card">
+        <p className="s-title" style={{ marginBottom: 12 }}>Riwayat — {periodLabel}</p>
+        <div className="empty-state" style={{ padding: '20px 0' }}>
+          <div className="empty-state__icon">🧾</div>
+          <p>Belum ada transaksi</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <p className="s-title">Riwayat — {periodLabel}</p>
+        <span style={{ fontSize: '0.72rem', color: 'var(--t3)' }}>{transactions.length} transaksi</span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {visibleGroups.map(([dateStr, txs]) => {
+          const dayTotal = txs.reduce((s, t) => t.type === 'expense' ? s - t.amount : s + t.amount, 0)
+          const dateObj  = new Date(dateStr + 'T12:00:00')
+          const today    = new Date()
+          const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+
+          let dayLabel = dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' })
+          if (dateStr === today.toISOString().split('T')[0])     dayLabel = `Hari ini · ${dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`
+          if (dateStr === yesterday.toISOString().split('T')[0]) dayLabel = `Kemarin · ${dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`
+
+          return (
+            <div key={dateStr}>
+              {/* Header tanggal */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                  {dayLabel}
+                </span>
+                <span style={{
+                  fontSize: '0.75rem', fontWeight: 700,
+                  color: dayTotal >= 0 ? 'var(--green)' : 'var(--red)',
+                }}>
+                  {dayTotal >= 0 ? '+' : ''}{formatRupiah(dayTotal)}
+                </span>
+              </div>
+
+              {/* Transaksi per hari */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {txs.map((tx, i) => (
+                  <div key={tx.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 0',
+                    borderBottom: i < txs.length - 1 ? '1px solid rgba(255,255,255,.04)' : 'none',
+                  }}>
+                    <div style={{
+                      width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: tx.type === 'income' ? 'rgba(52,211,153,.15)' : 'rgba(167,139,250,.12)',
+                      fontSize: '0.88rem',
+                    }}>
+                      {tx.type === 'income' ? '💰' : (CAT_ICON_MAP[tx.category] || '📦')}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontWeight: 600, fontSize: '0.83rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {tx.note || CAT_LABEL[tx.category] || tx.category}
+                      </p>
+                      <p style={{ fontSize: '0.68rem', color: 'var(--t3)', marginTop: 1 }}>
+                        {CAT_LABEL[tx.category] || tx.category}
+                      </p>
+                    </div>
+                    <span style={{
+                      fontWeight: 700, fontSize: '0.85rem', flexShrink: 0,
+                      color: tx.type === 'income' ? 'var(--green)' : 'var(--t1)',
+                    }}>
+                      {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Tombol lihat semua */}
+      {grouped.length > 3 && (
+        <button
+          onClick={() => setShowAll(!showAll)}
+          style={{
+            width: '100%', marginTop: 14,
+            padding: '8px', borderRadius: 'var(--r1)',
+            fontSize: '0.78rem', fontWeight: 600,
+            color: 'var(--violet)',
+            background: 'rgba(167,139,250,.1)',
+            border: '1px solid rgba(167,139,250,.2)',
+            cursor: 'pointer', fontFamily: 'var(--ff)',
+          }}
+        >
+          {showAll ? 'Tampilkan lebih sedikit ↑' : `Lihat semua ${grouped.length} hari ↓`}
+        </button>
+      )}
     </div>
   )
 }

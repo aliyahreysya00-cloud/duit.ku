@@ -81,6 +81,17 @@ export default function PocketsPage() {
   const estNabung     = Math.round(tersedia * savingPct / 100)
   const uangBebas     = Math.max(0, tersedia - estNabung)
 
+  // ── Cek apakah sudah sisihkan hari ini ───────────────────
+  const sisihkanHariIni = useMemo(() => {
+    const entry = allHistory.find((h) =>
+      h.source === 'Sisihkan nabung dari Uang Jajan' &&
+      h.pocket_name === 'tabungan' &&
+      h.type === 'in' &&
+      new Date(h.created_at).toLocaleDateString('en-CA') === todayStr
+    )
+    return entry || null
+  }, [allHistory, todayStr])
+
   // ── Wishlist ──────────────────────────────────────────────
   const activeWL    = wishlist.filter((w) => !w.is_completed).sort((a, b) => a.priority - b.priority)
   const totalKurang = activeWL.reduce((s, w) => s + Math.max(0, w.price - w.saved_amount), 0)
@@ -254,9 +265,35 @@ export default function PocketsPage() {
           </div>
 
           {estNabung > 0 && jp && tp && (
-            <button className="btn btn--primary btn--full" style={{ marginTop: 14 }} disabled={busy} onClick={sisihkan}>
-              Sisihkan {formatRupiah(estNabung)} ke Tabungan
-            </button>
+            <div style={{ marginTop: 14 }}>
+              {sisihkanHariIni ? (
+                /* Sudah sisihkan hari ini */
+                <div style={{
+                  padding: '10px 14px',
+                  background: 'rgba(52,211,153,.1)',
+                  border: '1px solid rgba(52,211,153,.25)',
+                  borderRadius: 'var(--r2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                }}>
+                  <span style={{ fontSize: '1.1rem' }}>✅</span>
+                  <div>
+                    <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--green)' }}>
+                      Sudah disisihkan hari ini
+                    </p>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--t3)', marginTop: 2 }}>
+                      {formatRupiah(sisihkanHariIni.amount)} ke Tabungan ·{' '}
+                      {new Date(sisihkanHariIni.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <button className="btn btn--primary btn--full" disabled={busy} onClick={sisihkan}>
+                  Sisihkan {formatRupiah(estNabung)} ke Tabungan
+                </button>
+              )}
+            </div>
           )}
         </div>
 
